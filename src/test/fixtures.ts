@@ -1,0 +1,118 @@
+import type { Miner, Part } from "@/types/db";
+import type { CreateMinerInput, MinerImportResult } from "@/features/miners/minerApi";
+
+export const sampleMiner: Miner = {
+  id: 1,
+  serial: "ANT-001",
+  model: "S21",
+  firmware: "1.2.3",
+  client_name: "Acme",
+  miner_type: "Antminer S21",
+  ip_address: "10.0.0.1",
+  mac_address: "00:11:22:33:44:55",
+  pickaxe: "PX-1",
+  miner_state: "running",
+  miner_row: "3",
+  miner_index: "12",
+  miner_rack: "R7",
+  miner_rack_group: "A",
+  location: "PX-1 / A / R7 / Row 3 Index 12",
+  status: "In Service",
+  acquired_date: "2024-01-02",
+  notes: null,
+};
+
+export const sampleMinerInput: CreateMinerInput = {
+  serial: "ANT-002",
+  model: "S21 Pro",
+  firmware: null,
+  client_name: "Acme",
+  miner_type: "Antminer S21 Pro",
+  ip_address: "10.0.0.2",
+  mac_address: null,
+  pickaxe: null,
+  miner_state: "running",
+  miner_row: null,
+  miner_index: null,
+  miner_rack: null,
+  miner_rack_group: null,
+  location: null,
+  status: "In Service",
+  acquired_date: null,
+  notes: null,
+};
+
+export const samplePart: Part = {
+  sku: "HSB-S21",
+  name: "S21 Hashboard",
+  category: "Hashboard",
+  qty_on_hand: 2,
+  reorder_threshold: 4,
+  supplier: "Bitmain",
+  unit_cost: 199.99,
+  notes: "Stocked low",
+};
+
+export const sampleImportResult: MinerImportResult = {
+  imported: 5,
+  updated: 2,
+  skipped: 1,
+};
+
+export const sampleImportResultNoSkipped: MinerImportResult = {
+  imported: 5,
+  updated: 2,
+  skipped: 0,
+};
+
+export const sampleCsvHeader = [
+  "client_name",
+  "miner_type",
+  "miner_ip",
+  "miner_mac",
+  "miner_serial",
+  "firmware_version",
+  "pickaxe",
+  "miner_state",
+  "miner_row",
+  "miner_index",
+  "miner_rack",
+  "miner_rack_group",
+  "status",
+  "miner_created_date",
+  "miner_id",
+  "miner_name",
+  "miner_tags",
+  "psu_serial",
+  "miner_control_board",
+  "wattage",
+  "hash_rate",
+  "max_temp",
+  "last_update",
+];
+
+export const sampleImportRowRaw = {
+  client_name: "Acme Mining",
+  miner_type: "Antminer S21 Pro",
+  miner_ip: "10.0.0.10",
+  miner_mac: "AA:BB:CC:DD:EE:FF",
+  miner_serial: "ANT-9001",
+  firmware_version: "2.0.1",
+  pickaxe: "PX-1",
+  miner_state: "running",
+  miner_row: "5",
+  miner_index: "9",
+  miner_rack: "R3",
+  miner_rack_group: "B",
+  status: "In Service",
+  miner_created_date: "1/2/2024",
+  miner_id: "42",
+  miner_name: "North Rack 1",
+  miner_tags: "production",
+  psu_serial: "PSU-001",
+  miner_control_board: "CB-X",
+  wattage: "3500",
+  hash_rate: "200 TH/s",
+  max_temp: "75",
+  last_update: "2024-06-01",
+};

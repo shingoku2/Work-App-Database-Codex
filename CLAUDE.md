@@ -1,43 +1,56 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file documents the project for both human contributors and the Claude Code CLI. The rules below are binding for code changes.
+
+**What this is:** offline desktop tool for tracking Antminer ASIC units (registry, lifecycle status, location, firmware) and replacement parts inventory. See [README.md](./README.md) for prerequisites and first-build steps; see [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ## Commands
 
-Verification after code changes (PowerShell):
+Install exact audited dependencies (lockfile is committed):
 
-```powershell
-npm run build      # tsc + vite build
-cargo check        # run from src-tauri/
-npm audit --omit=dev
+```bash
+npm ci
 ```
 
-Launch the desktop app:
+Verification after code changes (run from the repo root):
 
-```powershell
+```bash
+npm run build      # tsc + vite build
+npm test           # vitest run (frontend, jsdom)
+npm audit --omit=dev
+cd src-tauri
+cargo check        # backend type check
+cargo test         # backend test suite
+```
+
+Launch the desktop app (boots Vite and the Tauri shell together via `beforeDevCommand`):
+
+```bash
 npm run tauri:dev
 ```
 
 Production bundle (NSIS installer, current-user install):
 
-```powershell
+```bash
 npm run tauri:build
 ```
 
-`npm run dev` / `npm run preview` only serve the Vite frontend on `127.0.0.1:1420`; the app is non-functional without the Tauri shell because all data access goes through `invoke`.
+`npm run dev` / `npm run preview` only serve the Vite frontend on `127.0.0.1:1420`; the app is non-functional without the Tauri shell because all data access goes through `invoke`. `tauri:dev` is the normal entry point — it spawns Vite on that port and opens the Tauri window, so the dev only ever runs one command.
 
-There is no test runner, linter, or formatter configured. Do not add one without being asked.
+There is no linter or formatter configured. Do not add one without being asked.
+
+Frontend tests live under `src/test/` and are picked up by vitest's `include` glob `src/test/**/*.test.{ts,tsx}`. JSDOM 25 is missing `Blob.arrayBuffer()` and `Blob.text()` so `src/test/setup.ts` polyfills them via `FileReader`. The `tauri-plugin-sql` plugin is registered in `lib.rs` but is intentionally not granted in `capabilities/default.json` — all DB access still flows through the custom Rust commands.
 
 ## Architecture
 
-Tauri v2 desktop app. React 19 + TypeScript + Vite frontend talks to a Rust backend over Tauri commands; SQLite is the only persistence layer (local file `fleet.db`).
+Tauri v2 desktop app. React 19 + TypeScript + Vite frontend talks to a Rust backend over Tauri commands; SQLite is the only persistence layer (local file `fleet.db` in the OS app-data directory).
 
 ### Frontend → backend boundary
 
 - All backend calls go through `command<T>(name, args)` in `src/lib/tauri.ts` (thin wrapper around `@tauri-apps/api/core` `invoke`). Do not call `invoke` directly elsewhere.
 - All data fetching/mutation uses TanStack Query. The shared `QueryClient` lives in `src/lib/queryClient.ts`.
 - Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`).
-- Frontend is feature-sliced under `src/features/{dashboard,inventory,miners}`. Each feature owns its `*Api.ts` (TanStack-friendly functions wrapping `command()`) and its view component. Shared UI lives in `src/components/`.
+- Frontend is feature-sliced under `src/features/{dashboard,inventory,miners}`. Each feature owns its `*Api.ts` (TanStack-friendly functions wrapping `command()`) and its view component. Larger features split non-view helpers into sibling modules (e.g. `src/features/miners/import.ts` holds the CSV/TSV/XLSX import helpers extracted from `MinersView.tsx`). Shared UI lives in `src/components/`.
 - The shared `DataTable` (`src/components/ui/DataTable.tsx`) handles filtering, sorting, page size, page jump, first/prev/next/last, and optional row-click — reuse it rather than building new tables.
 
 ### Database layer (important quirk)
@@ -67,5 +80,5 @@ Every frontend operation maps to a `#[tauri::command]` in `src-tauri/src/command
 
 ## Dependency rules
 
-- Do **not** add the `xlsx` npm package — it has an unaddressed security advisory. Excel parsing uses `read-excel-file`; CSV/TSV parsing is implemented locally.
+- Do **not** add the `xlsx` npm package — it has an unaddressed security advisory. Excel parsing uses `read-excel-file` (pinned to exact `9.0.10` in `package.json`; do not widen to a caret range); CSV/TSV parsing is implemented locally.
 - Tailwind for styling; prefer `clsx` + `tailwind-merge` for conditional classes.

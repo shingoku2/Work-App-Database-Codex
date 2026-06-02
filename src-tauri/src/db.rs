@@ -69,6 +69,13 @@ async fn run_migrations(pool: &DbPool, migrations: &[(i64, &str)]) -> Result<(),
 }
 
 async fn run_migration(pool: &DbPool, sql: &str) -> Result<(), String> {
+    // Splits the migration file on `;` and runs each non-empty chunk as a single
+    // `sqlx::query`. This is a deliberately small splitter: it does NOT
+    // understand SQL line comments (`--`), string literals containing `;`, or
+    // multi-statement blocks like `BEGIN; ... COMMIT;`. Current migrations
+    // (0001, 0003, 0004) are written so each statement is on its own line and
+    // none contain `;` inside a string. If a future migration needs comments
+    // or embedded semicolons, replace this with a real SQL parser.
     for statement in sql.split(';').map(str::trim).filter(|statement| !statement.is_empty()) {
         if let Err(error) = sqlx::query(statement).execute(pool).await {
             let message = error.to_string();

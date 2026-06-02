@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/deped/.claude/**)"
+      "Read(//c/Users/deped/.claude/**)",
+      "Bash(cargo check:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(cargo test:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm test:*)",
+      "Bash(cargo update:*)"
     ]
   }
 }

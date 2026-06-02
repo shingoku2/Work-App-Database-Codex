@@ -4,25 +4,26 @@ use crate::{
 };
 use tauri::State;
 
+#[derive(sqlx::FromRow)]
+struct DashboardCounts {
+    unit_count: i64,
+    part_count: i64,
+    low_stock_count: i64,
+}
+
 #[tauri::command]
 pub async fn get_dashboard_summary(pool: State<'_, DbPool>) -> Result<DashboardSummary, String> {
-    let unit_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM miners")
-            .fetch_one(pool.inner())
-            .await
-            .map_err(|error| error.to_string())?;
-
-    let part_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM parts")
-            .fetch_one(pool.inner())
-            .await
-            .map_err(|error| error.to_string())?;
-
-    let low_stock_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM parts WHERE qty_on_hand <= reorder_threshold")
-            .fetch_one(pool.inner())
-            .await
-            .map_err(|error| error.to_string())?;
+    let DashboardCounts { unit_count, part_count, low_stock_count } = sqlx::query_as::<_, DashboardCounts>(
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM miners) AS unit_count,
+            (SELECT COUNT(*) FROM parts) AS part_count,
+            (SELECT COUNT(*) FROM parts WHERE qty_on_hand <= reorder_threshold) AS low_stock_count
+        "#,
+    )
+    .fetch_one(pool.inner())
+    .await
+    .map_err(|error| error.to_string())?;
 
     let units_by_status = sqlx::query_as::<_, CountByStatus>(
         "SELECT status, COUNT(*) AS count FROM miners GROUP BY status ORDER BY status",
