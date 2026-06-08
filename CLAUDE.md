@@ -1,84 +1,90 @@
-# CLAUDE.md
+# Project Guide
 
-This file documents the project for both human contributors and the Claude Code CLI. The rules below are binding for code changes.
-
-**What this is:** offline desktop tool for tracking Antminer ASIC units (registry, lifecycle status, location, firmware) and replacement parts inventory. See [README.md](./README.md) for prerequisites and first-build steps; see [CHANGELOG.md](./CHANGELOG.md) for release history.
+Antminer Fleet Manager is a self-hosted client/server asset-management application. Keep work focused on miners, spreadsheet import, parts inventory, dashboard reporting, accounts, and server operations. Do not reintroduce ticketing or technician workflows.
 
 ## Commands
 
-Install exact audited dependencies (lockfile is committed):
-
 ```bash
 npm ci
-```
-
-Verification after code changes (run from the repo root):
-
-```bash
-npm run build      # tsc + vite build
-npm test           # vitest run (frontend, jsdom)
+npm run build
+npm test
+cargo check --workspace
+cargo test --workspace
 npm audit --omit=dev
-cd src-tauri
-cargo check        # backend type check
-cargo test         # backend test suite
 ```
 
-Launch the desktop app (boots Vite and the Tauri shell together via `beforeDevCommand`):
+Desktop development:
 
 ```bash
 npm run tauri:dev
 ```
 
-Production bundle (NSIS installer, current-user install):
+Server development:
 
 ```bash
-npm run tauri:build
+cargo run -p antminer-fleet-server -- --config server/config/server.example.toml validate-config
 ```
 
-`npm run dev` / `npm run preview` only serve the Vite frontend on `127.0.0.1:1420`; the app is non-functional without the Tauri shell because all data access goes through `invoke`. `tauri:dev` is the normal entry point — it spawns Vite on that port and opens the Tauri window, so the dev only ever runs one command.
-
-There is no linter or formatter configured. Do not add one without being asked.
-
-Frontend tests live under `src/test/` and are picked up by vitest's `include` glob `src/test/**/*.test.{ts,tsx}`. JSDOM 25 is missing `Blob.arrayBuffer()` and `Blob.text()` so `src/test/setup.ts` polyfills them via `FileReader`. The `tauri-plugin-sql` plugin is registered in `lib.rs` but is intentionally not granted in `capabilities/default.json` — all DB access still flows through the custom Rust commands.
+Do not commit, push, package, or deploy unless explicitly asked.
 
 ## Architecture
 
-Tauri v2 desktop app. React 19 + TypeScript + Vite frontend talks to a Rust backend over Tauri commands; SQLite is the only persistence layer (local file `fleet.db` in the OS app-data directory).
+The root Cargo workspace contains:
 
-### Frontend → backend boundary
+1. `fleet-shared`: serializable API models, enums, and boundary validation.
+2. `antminer-fleet-server`: Axum/rustls HTTPS API, PostgreSQL, auth, admin CLI, and SQLite importer.
+3. `antminer-fleet-manager`: Tauri desktop client and pinned-HTTPS proxy.
 
-- All backend calls go through `command<T>(name, args)` in `src/lib/tauri.ts` (thin wrapper around `@tauri-apps/api/core` `invoke`). Do not call `invoke` directly elsewhere.
-- All data fetching/mutation uses TanStack Query. The shared `QueryClient` lives in `src/lib/queryClient.ts`.
-- Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`).
-- Frontend is feature-sliced under `src/features/{dashboard,inventory,miners}`. Each feature owns its `*Api.ts` (TanStack-friendly functions wrapping `command()`) and its view component. Larger features split non-view helpers into sibling modules (e.g. `src/features/miners/import.ts` holds the CSV/TSV/XLSX import helpers extracted from `MinersView.tsx`). Shared UI lives in `src/components/`.
-- The shared `DataTable` (`src/components/ui/DataTable.tsx`) handles filtering, sorting, page size, page jump, first/prev/next/last, and optional row-click — reuse it rather than building new tables.
+### Server ownership
 
-### Database layer (important quirk)
+PostgreSQL is the only production database. Migrations live only in `server/migrations/` and run automatically before database-dependent CLI commands or server startup.
 
-Migrations are registered in **two places** and both must be updated when adding a new one:
+The server owns:
 
-1. `src-tauri/src/lib.rs` — registers the `tauri-plugin-sql` migration list for `sqlite:fleet.db`.
-2. `src-tauri/src/db.rs` — `init_pool` opens its own `sqlx::SqlitePool` against `<app_data_dir>/fleet.db` and runs the same migrations through a custom `schema_migrations` table. This is the pool that backend commands actually use (managed via `handle.manage(pool)` and injected as `State<'_, DbPool>`).
+- Miner/part/dashboard queries.
+- Import transactions and validation.
+- Accounts, roles, password hashes, sessions, and authorization.
+- Optimistic version checks.
+- TLS termination.
 
-The custom runner in `db.rs` swallows `duplicate column name` errors so re-running `ALTER TABLE … ADD COLUMN` migrations is safe, but other failures propagate. Migration versions are non-contiguous (1, 3, 4) because `0002` was removed; don't renumber, just append.
+### Desktop boundary
 
-### Backend commands
+React calls only the wrapper in `src/lib/tauri.ts`. Feature APIs retain the established Tauri command names. Rust commands in `src-tauri/src/commands/mod.rs` proxy to `/api/v1`; the WebView does not receive unrestricted network access.
 
-Every frontend operation maps to a `#[tauri::command]` in `src-tauri/src/commands/{miners,parts,dashboard}.rs`, registered in `src-tauri/src/lib.rs`'s `invoke_handler!`. Adding a command requires both the function and the handler registration. Rust models in `src-tauri/src/models.rs` mirror TypeScript interfaces in `src/types/db.ts` — keep them in sync.
+The desktop stores:
 
-### Schema constraints
+- One server URL and pinned certificate PEM/fingerprint in app data.
+- One session token in the OS credential manager.
 
-`miners.model` and `miners.status` are `CHECK`-constrained enums (see `0001_initial_schema.sql`); the TypeScript `MinerModel` / `MinerStatus` / `PartCategory` unions in `src/types/db.ts` mirror them. Widening the enum requires changing the SQL CHECK, the Rust model, and the TS type together.
+It does not store inventory data, passwords, or an offline mutation queue.
 
-`miner_serial` is the import upsert key — `import_miners` does `INSERT … ON CONFLICT(serial) DO UPDATE`, so re-importing a facility export refreshes existing rows.
+### Pairing
 
-## Scope and product rules
+`probe_server` performs a one-time TLS connection with certificate validation disabled solely to retrieve `/pairing`. The UI displays the returned SHA-256 DER fingerprint for out-of-band confirmation. `pair_server` recomputes the fingerprint from the PEM, then verifies `/health` using that certificate as the trust root. Every later request uses the pinned certificate.
 
-- This app intentionally has **no ticketing or technician workflow**. Migration `0003_remove_ticketing.sql` drops the legacy tables. Do not reintroduce ticket/technician/repair_parts tables unless explicitly asked.
-- Unit Registry is **list-first**: clicking a miner row (or "add new") opens a dedicated detail/edit page. Do not move the full edit form back into the list view.
-- Miner import supports `.csv`, `.tsv`, `.xlsx`. Expected columns: `client_name`, `miner_type`, `miner_ip`, `miner_mac`, `miner_serial`, `firmware_version`, `pickaxe`, `miner_state`, `miner_row`, `miner_index`, `miner_rack`, `miner_rack_group`. Extra columns (miner id, miner name, raw status, tags, PSU serial, control board, wattage, hash rate, max temp, last update) are folded into `notes`.
+Certificate replacement requires forgetting and explicitly pairing the server again. Do not add an insecure bypass.
 
-## Dependency rules
+### Shared contracts
 
-- Do **not** add the `xlsx` npm package — it has an unaddressed security advisory. Excel parsing uses `read-excel-file` (pinned to exact `9.0.10` in `package.json`; do not widen to a caret range); CSV/TSV parsing is implemented locally.
-- Tailwind for styling; prefer `clsx` + `tailwind-merge` for conditional classes.
+Rust protocol types live in `crates/fleet-shared/src/lib.rs`; matching TypeScript types live in `src/types/db.ts`. Keep field names and enum values synchronized.
+
+Miner serials are trimmed and model/status values validated before writes. Imports deduplicate by trimmed serial and validate the whole batch before opening the transaction.
+
+Miners, parts, and users use numeric `version` values. Updates and deletes must send the expected version; conflicts keep edit state open and require a reload.
+
+## Product rules
+
+- Unit Registry remains list-first with a dedicated detail/edit page.
+- Spreadsheet parsing remains client-side through `read-excel-file` and local CSV/TSV helpers.
+- Expected import columns and notes mapping remain unchanged.
+- `xlsx` remains forbidden.
+- Users can read/write fleet data.
+- Admins additionally manage accounts.
+- The final enabled admin cannot be disabled or demoted.
+- Existing SQLite data moves only through the server CLI dry-run/apply importer.
+
+## Operations
+
+The first server package target is Debian/Ubuntu amd64. Packaging files are under `server/packaging/`; `server/scripts/build-deb.sh` stages the binary, systemd unit, config example, and maintainer scripts.
+
+Secrets belong only in root/service-readable server configuration or the OS credential manager. Never print database passwords, plaintext user passwords, session tokens, or private keys.

@@ -1,0 +1,29 @@
+[Unit]
+Description=Antminer Fleet Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=antminer-fleet
+Group=antminer-fleet
+WorkingDirectory=/var/lib/antminer-fleet
+ExecStart=/usr/bin/antminer-fleet-server --config /etc/antminer-fleet/server.toml serve
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/antminer-fleet
+
+[Install]
+WantedBy=multi-user.target

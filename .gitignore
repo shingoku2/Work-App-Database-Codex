@@ -3,6 +3,15 @@ dist/
 
 src-tauri/target/
 src-tauri/gen/
+target/
+server/package/
 
 *.log
 *.tmp
+
+# Local deployment configuration and private keys.
+server.toml
+server/config/*.local.toml
+*.key
+*.pem
+!server/config/server.example.toml

@@ -15,6 +15,6 @@ export async function updatePart(input: CreatePartInput): Promise<void> {
   return command<void>("update_part", { input });
 }
 
-export async function deletePart(sku: string): Promise<void> {
-  return command<void>("delete_part", { sku });
+export async function deletePart(sku: string, version: number): Promise<void> {
+  return command<void>("delete_part", { sku, version });
 }

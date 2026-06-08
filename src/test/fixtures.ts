@@ -20,6 +20,7 @@ export const sampleMiner: Miner = {
   status: "In Service",
   acquired_date: "2024-01-02",
   notes: null,
+  version: 1,
 };
 
 export const sampleMinerInput: CreateMinerInput = {
@@ -49,20 +50,23 @@ export const samplePart: Part = {
   qty_on_hand: 2,
   reorder_threshold: 4,
   supplier: "Bitmain",
-  unit_cost: 199.99,
+  unit_cost_cents: 19999,
   notes: "Stocked low",
+  version: 1,
 };
 
 export const sampleImportResult: MinerImportResult = {
   imported: 5,
-  updated: 2,
+  updated: 0,
   skipped: 1,
+  conflicts: ["ANT-OLD"],
 };
 
 export const sampleImportResultNoSkipped: MinerImportResult = {
   imported: 5,
-  updated: 2,
+  updated: 0,
   skipped: 0,
+  conflicts: [],
 };
 
 export const sampleCsvHeader = [

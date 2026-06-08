@@ -373,21 +373,21 @@ describe("hasExcelMagicBytes", () => {
 });
 
 describe("formatImportMessage", () => {
-  it("renders the standard 3-bucket message when skipped is zero", () => {
+  it("renders the added count when no rows conflict", () => {
     expect(formatImportMessage(sampleImportResultNoSkipped)).toBe(
-      "Imported miners: 5 added, 2 updated.",
+      "Imported miners: 5 added.",
     );
   });
 
   it("includes the skipped count when it is non-zero", () => {
     expect(formatImportMessage(sampleImportResult)).toBe(
-      "Imported miners: 5 added, 2 updated, 1 skipped.",
+      "Imported miners: 5 added, 1 skipped to preserve existing records, conflicts: ANT-OLD.",
     );
   });
 
-  it("renders a zero/zero/zero case as '0 added, 0 updated.'", () => {
-    expect(formatImportMessage({ imported: 0, updated: 0, skipped: 0 })).toBe(
-      "Imported miners: 0 added, 0 updated.",
+  it("renders a zero case", () => {
+    expect(formatImportMessage({ imported: 0, updated: 0, skipped: 0, conflicts: [] })).toBe(
+      "Imported miners: 0 added.",
     );
   });
 });

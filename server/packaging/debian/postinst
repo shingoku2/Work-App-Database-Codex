@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+if ! getent group antminer-fleet >/dev/null; then
+  addgroup --system antminer-fleet
+fi
+if ! getent passwd antminer-fleet >/dev/null; then
+  adduser --system --ingroup antminer-fleet --home /var/lib/antminer-fleet --no-create-home antminer-fleet
+fi
+
+install -d -m 0750 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet
+install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet
+install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet/tls
+
+if [ ! -f /etc/antminer-fleet/server.toml ]; then
+  install -m 0640 -o root -g antminer-fleet /usr/share/doc/antminer-fleet-server/server.example.toml /etc/antminer-fleet/server.toml
+fi
+
+systemctl daemon-reload
+echo "Edit /etc/antminer-fleet/server.toml, generate TLS, create the database, then enable the service."

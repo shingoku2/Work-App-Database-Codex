@@ -1,0 +1,8 @@
+Package: antminer-fleet-server
+Version: 0.3.0
+Section: admin
+Priority: optional
+Architecture: amd64
+Recommends: postgresql
+Maintainer: Antminer Fleet Administrator
+Description: Central HTTPS and PostgreSQL server for Antminer Fleet Manager

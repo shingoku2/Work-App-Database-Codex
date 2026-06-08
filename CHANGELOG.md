@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a separately installed Rust HTTPS server backed by PostgreSQL, with Debian/systemd packaging and administrative CLI commands.
+- Added named accounts, Argon2id password hashing, revocable sessions, Admin/User roles, login throttling, and account administration.
+- Added certificate-fingerprint pairing and certificate pinning for one configured server per desktop installation.
+- Added a server-side dry-run/apply importer for existing desktop `fleet.db` files with explicit conflict policies.
+- Added optimistic concurrency versions for miners, parts, and users.
+
+### Changed
+- Converted the Tauri application from a local SQLite owner into an online-required remote client.
+- Moved all production migrations and database access to the central server.
+- Store desktop session tokens in the operating-system credential manager.
+- Store part costs as exact integer cents instead of binary floating point.
+- Made spreadsheet miner import administrator-only and conflict-preserving.
+
+### Fixed
+- Enforced exact paired-certificate verification and recoverable versioned desktop server profiles.
+- Added bounded source-aware login throttling and transactional final-administrator protection.
+- Hardened server configuration validation and removed plaintext password CLI arguments.
+- Normalized miner serials at the backend boundary so manual create/update and bulk import treat whitespace-equivalent serials as the same asset identity.
+- Applied the same supported model and lifecycle-status validation to bulk imports that manual miner writes already use; invalid batches are rejected before database mutation.
+- Return explicit not-found errors when an update or delete targets a miner or inventory part that no longer exists.
+
+### Security
+- Documented that builds are internal-use only until the project declares a license and assembles required third-party license attribution.
+
 ## [0.2.0] - 2026-06-02
 
 ### Added

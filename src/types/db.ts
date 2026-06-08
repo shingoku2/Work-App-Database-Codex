@@ -21,6 +21,7 @@ export interface Miner {
   status: MinerStatus;
   acquired_date: string | null;
   notes: string | null;
+  version: number;
 }
 
 export interface Part {
@@ -30,8 +31,9 @@ export interface Part {
   qty_on_hand: number;
   reorder_threshold: number;
   supplier: string | null;
-  unit_cost: number;
+  unit_cost_cents: number;
   notes: string | null;
+  version: number;
 }
 
 export interface DashboardSummary {
@@ -40,4 +42,36 @@ export interface DashboardSummary {
   low_stock_count: number;
   units_by_status: Array<{ status: MinerStatus; count: number }>;
   low_stock_parts: Part[];
+}
+
+export type UserRole = "admin" | "user";
+
+export interface User {
+  id: number;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  enabled: boolean;
+  version: number;
+}
+
+export interface ServerInfo {
+  product: string;
+  version: string;
+  api_version: string;
+}
+
+export interface PairingInfo {
+  server: ServerInfo;
+  certificate_pem: string;
+  fingerprint_sha256: string;
+}
+
+export interface ConnectionState {
+  paired: boolean;
+  status: "unpaired" | "unauthenticated" | "authenticated" | "unavailable" | "repair_required";
+  url: string | null;
+  fingerprint_sha256: string | null;
+  user: User | null;
+  error: string | null;
 }

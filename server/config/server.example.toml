@@ -1,0 +1,17 @@
+# Restrict this file to root and the antminer-fleet service account.
+# Required. Use 127.0.0.1 for local-only access; 0.0.0.0 exposes every IPv4 interface.
+listen = "0.0.0.0:8443"
+# Optional, defaults to 30. Valid range: 1-365 days.
+session_days = 30
+
+[database]
+# Required PostgreSQL URL. Percent-encode reserved characters in usernames/passwords.
+# Replace CHANGE_ME before validation or startup.
+url = "postgres://antminer_fleet:CHANGE_ME@127.0.0.1/antminer_fleet"
+# Optional, defaults to 10. Valid range: 1-100.
+max_connections = 10
+
+[tls]
+# Required paths. Both files must exist, parse, and match for validation/startup.
+certificate = "/etc/antminer-fleet/tls/server.crt"
+private_key = "/etc/antminer-fleet/tls/server.key"

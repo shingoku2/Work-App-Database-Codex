@@ -234,13 +234,18 @@ export async function readSpreadsheetRows(file: File): Promise<ImportRow[]> {
   }
 }
 
-export function formatImportMessage(result: { imported: number; updated: number; skipped: number }): string {
-  const parts = [
-    `${result.imported} added`,
-    `${result.updated} updated`,
-  ];
+export function formatImportMessage(result: {
+  imported: number;
+  updated: number;
+  skipped: number;
+  conflicts: string[];
+}): string {
+  const parts = [`${result.imported} added`];
   if (result.skipped > 0) {
-    parts.push(`${result.skipped} skipped`);
+    parts.push(`${result.skipped} skipped to preserve existing records`);
+  }
+  if (result.conflicts.length > 0) {
+    parts.push(`conflicts: ${result.conflicts.join(", ")}`);
   }
   return `Imported miners: ${parts.join(", ")}.`;
 }

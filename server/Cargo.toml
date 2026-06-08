@@ -1,0 +1,29 @@
+[package]
+name = "antminer-fleet-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+argon2 = "0.5"
+axum = "0.8"
+axum-server = { version = "0.8", default-features = false, features = ["tls-rustls-no-provider"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+fleet-shared = { path = "../crates/fleet-shared" }
+rand = "0.9"
+rcgen = "0.14"
+rpassword = "7"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx = { version = "0.8", features = ["chrono", "postgres", "runtime-tokio", "sqlite", "tls-rustls"] }
+thiserror.workspace = true
+tokio.workspace = true
+toml = "0.9"
+tower-http = { version = "0.6", features = ["limit", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid.workspace = true
+url = "2"

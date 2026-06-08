@@ -53,7 +53,7 @@ describe("updateMiner", () => {
 
 describe("importMiners", () => {
   it("wraps a single object as a one-element array under 'miners'", async () => {
-    mockedCommand.mockResolvedValueOnce({ imported: 1, updated: 0, skipped: 0 });
+    mockedCommand.mockResolvedValueOnce({ imported: 1, updated: 0, skipped: 0, conflicts: [] });
 
     await importMiners(sampleMinerInput as CreateMinerInput);
 
@@ -61,7 +61,7 @@ describe("importMiners", () => {
   });
 
   it("passes an array of miners through under 'miners'", async () => {
-    mockedCommand.mockResolvedValueOnce({ imported: 2, updated: 0, skipped: 0 });
+    mockedCommand.mockResolvedValueOnce({ imported: 2, updated: 0, skipped: 0, conflicts: [] });
 
     const batch: CreateMinerInput[] = [sampleMinerInput, { ...sampleMinerInput, serial: "X-2" }];
     await importMiners(batch);
@@ -74,8 +74,8 @@ describe("deleteMiner", () => {
   it("passes the id under 'id'", async () => {
     mockedCommand.mockResolvedValueOnce(undefined);
 
-    await deleteMiner(42);
+    await deleteMiner(42, 3);
 
-    expect(mockedCommand).toHaveBeenCalledWith("delete_miner", { id: 42 });
+    expect(mockedCommand).toHaveBeenCalledWith("delete_miner", { id: 42, version: 3 });
   });
 });

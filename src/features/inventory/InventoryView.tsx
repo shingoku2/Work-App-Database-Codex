@@ -15,8 +15,9 @@ const emptyPart: Part = {
   qty_on_hand: 0,
   reorder_threshold: 0,
   supplier: "",
-  unit_cost: 0,
+  unit_cost_cents: 0,
   notes: "",
+  version: 0,
 };
 
 export function InventoryView() {
@@ -36,7 +37,7 @@ export function InventoryView() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deletePart,
+    mutationFn: ({ sku, version }: Pick<Part, "sku" | "version">) => deletePart(sku, version),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["parts"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -58,7 +59,7 @@ export function InventoryView() {
     },
     { accessorKey: "reorder_threshold", header: "Threshold" },
     { accessorKey: "supplier", header: "Supplier", cell: ({ row }) => row.original.supplier || "-" },
-    { accessorKey: "unit_cost", header: "Unit Cost", cell: ({ row }) => `$${row.original.unit_cost.toFixed(2)}` },
+    { accessorKey: "unit_cost_cents", header: "Unit Cost", cell: ({ row }) => formatCurrency(row.original.unit_cost_cents) },
     {
       id: "actions",
       header: "",
@@ -67,7 +68,7 @@ export function InventoryView() {
           <button type="button" className={secondaryButtonClass} onClick={() => { setEditingSku(row.original.sku); setForm(row.original); }}>
             Edit
           </button>
-          <button type="button" className={secondaryButtonClass} onClick={() => deleteMutation.mutate(row.original.sku)}>
+          <button type="button" className={secondaryButtonClass} onClick={() => deleteMutation.mutate({ sku: row.original.sku, version: row.original.version })}>
             Delete
           </button>
         </div>
@@ -92,7 +93,15 @@ export function InventoryView() {
           <input className={fieldClass} type="number" min="0" step="1" value={form.qty_on_hand} onChange={(event) => setForm({ ...form, qty_on_hand: Number(event.target.value) })} />
           <input className={fieldClass} type="number" min="0" step="1" placeholder="Reorder threshold" value={form.reorder_threshold} onChange={(event) => setForm({ ...form, reorder_threshold: Number(event.target.value) })} />
           <input className={fieldClass} placeholder="Supplier" value={form.supplier ?? ""} onChange={(event) => setForm({ ...form, supplier: event.target.value })} />
-          <input className={fieldClass} type="number" min="0" step="0.01" placeholder="Unit cost" value={form.unit_cost} onChange={(event) => setForm({ ...form, unit_cost: Number(event.target.value) })} />
+          <input
+            className={fieldClass}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Unit cost"
+            value={(form.unit_cost_cents / 100).toFixed(2)}
+            onChange={(event) => setForm({ ...form, unit_cost_cents: Math.round(Number(event.target.value) * 100) })}
+          />
           <textarea className={textareaClass} placeholder="Notes" value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           <div className="col-span-4 flex items-center gap-2">
             <button className={primaryButtonClass} disabled={saveMutation.isPending}>{editingSku ? "Save Part" : "Create Part"}</button>
@@ -107,4 +116,8 @@ export function InventoryView() {
       {isLoading ? <div className="text-slate-400">Loading inventory...</div> : <DataTable columns={columns} data={data} searchPlaceholder="Filter inventory" />}
     </section>
   );
+}
+
+function formatCurrency(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }

@@ -39,7 +39,7 @@ const emptyForm: CreateMinerInput = {
 
 type MinerViewMode = { type: "list" } | { type: "new" } | { type: "detail"; id: number };
 
-export function MinersView() {
+export function MinersView({ canImport }: { canImport: boolean }) {
   const queryClient = useQueryClient();
   const [view, setView] = useState<MinerViewMode>({ type: "list" });
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export function MinersView() {
   const selectedMiner = view.type === "detail" ? data.find((miner) => miner.id === view.id) ?? null : null;
 
   const deleteMutation = useMutation({
-    mutationFn: deleteMiner,
+    mutationFn: ({ id, version }: Pick<Miner, "id" | "version">) => deleteMiner(id, version),
     onSuccess: async () => {
       setView({ type: "list" });
       await queryClient.invalidateQueries({ queryKey: ["miners"] });
@@ -87,7 +87,7 @@ export function MinersView() {
           disabled={deleteMutation.isPending}
           onClick={(event) => {
             event.stopPropagation();
-            deleteMutation.mutate(row.original.id);
+            deleteMutation.mutate({ id: row.original.id, version: row.original.version });
           }}
         >
           Delete
@@ -166,7 +166,7 @@ export function MinersView() {
         </button>
       </div>
 
-      <Panel title="Import Miners">
+      {canImport && <Panel title="Import Miners">
         <div className="flex flex-wrap items-center gap-3">
           <label className={`${primaryButtonClass} inline-flex cursor-pointer items-center gap-2`}>
             <Upload size={16} />
@@ -198,7 +198,7 @@ export function MinersView() {
           )}
           {importMutation.error && <span className="text-sm text-red-300">{String(importMutation.error)}</span>}
         </div>
-      </Panel>
+      </Panel>}
 
       {isLoading ? (
         <div className="text-slate-400">Loading units...</div>
@@ -228,7 +228,7 @@ function MinerDetailView({
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (miner) {
-        await updateMiner({ ...form, id: miner.id });
+        await updateMiner({ ...form, id: miner.id, version: miner.version });
       } else {
         await createMiner(form);
       }

@@ -1,9 +1,10 @@
-import { Boxes, Gauge, LayoutDashboard, Wrench } from "lucide-react";
+import { Boxes, Gauge, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
+import type { User } from "@/types/db";
 
-export type ViewKey = "dashboard" | "units" | "inventory";
+export type ViewKey = "dashboard" | "units" | "inventory" | "accounts" | "settings";
 
-const nav = [
+const baseNav = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "units", label: "Units", icon: Gauge },
   { key: "inventory", label: "Inventory", icon: Boxes },
@@ -12,12 +13,21 @@ const nav = [
 export function AppShell({
   active,
   onNavigate,
+  user,
+  serverUrl,
   children,
 }: {
   active: ViewKey;
   onNavigate: (view: ViewKey) => void;
+  user: User;
+  serverUrl: string;
   children: ReactNode;
 }) {
+  const nav = [
+    ...baseNav,
+    ...(user.role === "admin" ? [{ key: "accounts" as const, label: "Accounts", icon: Users }] : []),
+    { key: "settings" as const, label: "Settings", icon: Settings },
+  ];
   return (
     <div className="flex min-h-screen bg-[#101821] text-slate-100">
       <aside className="w-64 border-r border-white/10 bg-[#0b1219]">
@@ -27,7 +37,7 @@ export function AppShell({
           </div>
           <div>
             <div className="font-semibold">Antminer Fleet</div>
-            <div className="text-xs text-slate-500">Asset inventory</div>
+            <div className="text-xs text-slate-500">Central inventory</div>
           </div>
         </div>
         <nav className="space-y-1 p-3">
@@ -54,10 +64,10 @@ export function AppShell({
         <header className="flex h-16 items-center justify-between border-b border-white/10 px-8">
           <div>
             <h1 className="text-lg font-semibold">ASIC Asset Management</h1>
-            <p className="text-xs text-slate-500">Single-user, offline workstation database</p>
+            <p className="text-xs text-slate-500">{serverUrl}</p>
           </div>
           <div className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
-            Local only
+            {user.display_name} · Connected
           </div>
         </header>
         <div className="p-8">{children}</div>

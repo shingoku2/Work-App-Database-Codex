@@ -37,7 +37,7 @@ describe("updatePart", () => {
 describe("deletePart", () => {
   it("passes the sku under 'sku'", async () => {
     mockedCommand.mockResolvedValueOnce(undefined);
-    await deletePart("HSB-S21");
-    expect(mockedCommand).toHaveBeenCalledWith("delete_part", { sku: "HSB-S21" });
+    await deletePart("HSB-S21", 4);
+    expect(mockedCommand).toHaveBeenCalledWith("delete_part", { sku: "HSB-S21", version: 4 });
   });
 });

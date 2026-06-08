@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for the main window. Note: tauri-plugin-sql is registered in lib.rs but intentionally NOT granted to the frontend — all database access goes through the custom Rust commands in src-tauri/src/commands/ (see CLAUDE.md, dual-registration quirk).",
+  "description": "Default capability for the remote API client. Server access is exposed through typed Rust commands.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }
