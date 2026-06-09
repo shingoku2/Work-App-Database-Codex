@@ -3,6 +3,7 @@ dist/
 .env*
 !.env.example
 scripts/fleet-tunnel.local.json
+.local/
 
 src-tauri/target/
 src-tauri/gen/
