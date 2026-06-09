@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
-import { getConnectionState } from "@/features/connection/connectionApi";
+import { getConnectionState, login } from "@/features/connection/connectionApi";
 
 vi.mock("@/features/connection/connectionApi", () => ({
   getConnectionState: vi.fn(),
@@ -13,6 +14,12 @@ vi.mock("@/features/connection/connectionApi", () => ({
 }));
 
 const mockedState = vi.mocked(getConnectionState);
+const mockedLogin = vi.mocked(login);
+
+beforeEach(() => {
+  mockedState.mockReset();
+  mockedLogin.mockReset();
+});
 
 function renderGate() {
   const client = new QueryClient({
@@ -39,6 +46,47 @@ describe("ConnectionGate", () => {
     renderGate();
 
     expect(await screen.findByRole("button", { name: "Sign In" })).toBeEnabled();
+  });
+
+  it("signs in again from an unauthenticated saved-server state", async () => {
+    const user = {
+      id: 1,
+      username: "admin",
+      display_name: "Administrator",
+      role: "admin" as const,
+      enabled: true,
+      version: 1,
+    };
+    mockedState
+      .mockResolvedValueOnce({
+        paired: true,
+        status: "unauthenticated",
+        url: "https://fleet.example:8443",
+        fingerprint_sha256: "AA:BB",
+        user: null,
+        error: null,
+      })
+      .mockResolvedValue({
+        paired: true,
+        status: "authenticated",
+        url: "https://fleet.example:8443",
+        fingerprint_sha256: "AA:BB",
+        user,
+        error: null,
+      });
+    mockedLogin.mockResolvedValue({ user });
+    const actor = userEvent.setup();
+
+    renderGate();
+    await actor.type(await screen.findByPlaceholderText("Username"), "admin");
+    await actor.type(screen.getByPlaceholderText("Password"), "long-enough-password");
+    await actor.click(screen.getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() =>
+      expect(mockedLogin).toHaveBeenCalledWith("admin", "long-enough-password"),
+    );
+    expect(await screen.findByText("authenticated")).toBeInTheDocument();
+    expect(mockedState).toHaveBeenCalledTimes(2);
   });
 
   it("offers re-pairing when the pinned server is unavailable", async () => {

@@ -1,61 +1,86 @@
 # Fix Report
 
 ## Source Assessment
-- Findings source: `.codex/reports/04-code-audit.md`
-- Files inspected: miner/part Rust commands, models, schema migrations, frontend API wrappers, and existing tests
-- Assumptions: serial identity is whitespace-insensitive; Tauri commands are the validation boundary
-- Commands run before changes: `npm run build`, `npm test`, `cargo check`, `cargo test`
+- Findings source: `.codex/reports/03-env-validation.md` and `.codex/reports/04-code-audit.md`
+- Files inspected: `server/src`, server migrations and packaging, `src-tauri/src/client.rs`, Tauri commands, connection UI, tests, and operator docs
+- Assumptions: this is an internal application; public distribution licensing is not a release requirement
+- Commands run before reconciliation: `cargo check --workspace --locked`, `cargo test --workspace --locked`, `npm test -- --run`, `npm run build`
 
 ## Fixes Applied
 
-### [HIGH] Bulk import bypasses miner model and status validation
-- Source finding: code audit finding 1
-- Files changed: `src-tauri/src/commands/miners.rs`
-- What changed: create, update, and import now use one validation function; imports validate the entire deduplicated batch before opening a transaction.
-- Why this resolves the issue: invalid model/status values are rejected consistently before database writes.
-- Tests/validation: shared validation unit tests added; full Rust suite pending in stage 6.
-- Side effects or follow-up: import errors now identify invalid data before any batch mutation.
+### [HIGH] Login unavailable after pairing or logout
+- Files changed: `src-tauri/src/client.rs`, `src/features/connection/ConnectionGate.tsx`
+- What changed: a missing local credential is represented as `AUTH_REQUIRED`, so the login form remains available after pairing and logout.
+- Validation: connection-gate tests cover unauthenticated states.
 
-### [MEDIUM] Serial identity differs between manual writes and imports
-- Source finding: code audit finding 2
-- Files changed: `src-tauri/src/commands/miners.rs`
-- What changed: serials are trimmed before create/update persistence and import deduplication/upsert.
-- Why this resolves the issue: whitespace-equivalent serials use one canonical database identity.
-- Tests/validation: unit tests assert normalization and trimmed deduplication.
-- Side effects or follow-up: existing rows containing leading/trailing whitespace are not migrated automatically.
+### [HIGH] Certificate trust was additive instead of pinned
+- Files changed: `src-tauri/src/client.rs`, `src-tauri/Cargo.toml`
+- What changed: authenticated requests disable built-in root certificates and use a custom verifier that accepts only the paired leaf certificate.
+- Validation: Rust test verifies that every other certificate is rejected.
 
-### [LOW] Missing records are reported as successful mutations
-- Source finding: code audit finding 4
-- Files changed: `src-tauri/src/commands/miners.rs`, `src-tauri/src/commands/parts.rs`
-- What changed: update/delete commands check `rows_affected()` and return a not-found error when no row changed.
-- Why this resolves the issue: stale operations no longer appear successful.
-- Tests/validation: compile and existing suite pending in stage 6; database integration tests remain desirable.
-- Side effects or follow-up: frontend users may now see an explicit not-found error after stale edits.
+### [HIGH] Login limiter permitted targeted lockout and unbounded storage
+- Files changed: `server/src/api.rs`
+- What changed: throttling is keyed by source address and account, includes a source-wide limit, expires old entries, and caps in-memory storage.
+- Validation: tests cover source isolation, expiry, and bounded storage.
+
+### [HIGH] Concurrent updates could remove every administrator
+- Files changed: `server/src/api.rs`
+- What changed: administrator updates run in one transaction guarded by a PostgreSQL advisory transaction lock and row lock before checking the final-admin invariant.
+- Validation: compile and unit suites pass; concurrent PostgreSQL integration coverage remains outstanding.
+
+### [HIGH] SQLite abort import could overwrite concurrent data
+- Files changed: `server/src/import.rs`
+- What changed: apply uses a serializable PostgreSQL transaction. Abort mode uses plain inserts so a late conflict rolls back the transaction instead of updating server data.
+- Validation: compile passes; a live concurrent PostgreSQL integration test remains outstanding.
+
+### [MEDIUM] Bulk import bypassed concurrency policy
+- Files changed: `server/src/api.rs`, frontend import flow
+- What changed: bulk miner import is administrator-only and requires explicit conflict handling in the user workflow.
+- Validation: frontend import tests and Rust compilation pass.
+
+### [MEDIUM] Currency used floating point
+- Files changed: shared models, PostgreSQL migrations, API/import code, frontend types and import conversion
+- What changed: part cost is stored and transported as integer cents. Migration `0002_exact_currency.sql` converts existing values.
+- Validation: Rust and frontend suites pass.
+
+### [LOW] Part update path did not encode SKU
+- Files changed: `src-tauri/src/commands/mod.rs`
+- What changed: update and delete use one percent-encoded part path helper.
+- Validation: Rust unit test covers reserved characters.
+
+### [HIGH] Runtime configuration validation was incomplete
+- Files changed: `server/src/config.rs`, CLI handling, client config loading, packaging, and docs
+- What changed: database scheme/host/name/placeholders, pool size, session duration, TLS paths, matching TLS material, hidden/stdin password input, malformed client config quarantine, and logging configuration are validated or documented.
+- Validation: configuration and malformed-client-config unit tests pass.
 
 ## Skipped or Deferred Findings
 
-### [MEDIUM] Dual, non-atomic migration execution
-- Reason skipped: the current architecture deliberately registers migrations in both `lib.rs` and `db.rs`; changing ownership can affect existing local databases.
-- Required context/decision: choose one migration owner and test fresh, current, and partially migrated database files.
-- Recommended owner: backend maintainer with release database fixtures.
+### [INTERNAL COMPLIANCE] Project and dependency licensing
+- Reason skipped: the user confirmed the application is for internal use and is not publicly distributed.
+- Follow-up: retain third-party license and attribution records for internal compliance and reassess before distributing binaries outside the organization.
+
+### [INTEGRATION] Live PostgreSQL concurrency and migration tests
+- Reason skipped: no disposable PostgreSQL instance is configured in this Windows workspace.
+- Follow-up: run migration, concurrent final-admin, abort-import, and API authentication tests against a disposable PostgreSQL server before production rollout.
 
 ## Files Changed
-- `src-tauri/src/commands/miners.rs`
-- `src-tauri/src/commands/parts.rs`
+- This reconciliation updated only `.codex/reports/05-fix-report.md`.
+- The production fixes are present in commit `23537c9`.
 
 ## Validation Summary
-- Command: `cargo test`; `cargo check`; `npm test`; `npm run build`; targeted `rustfmt --check`
-- Result: passed after correcting one Rust ownership error found by the first compile
-- Notes: 13 Rust tests and 79 frontend tests pass. The first Rust run failed because a normalized serial string was moved into the deduplication set before assignment; cloning for the set resolved it.
+- `cargo check --workspace --locked`: passed
+- `cargo test --workspace --locked`: passed
+- `npm test -- --run`: passed, 84 tests
+- `npm run build`: passed
 
 ## Manual Action Required
-- Secret rotations: none
-- Config updates: none
-- Migrations: existing whitespace-padded serials may need a future data-cleanup migration
-- Deployment notes: do not distribute until the license blocker in report 02 is resolved
+- Configure PostgreSQL and TLS on the central Linux machine.
+- Verify the paired fingerprint out of band.
+- Exercise a disposable-server migration and client pairing smoke test.
+- Preserve third-party attribution records for internal compliance.
 
 ## Final Summary
-- Fixed: 3 findings
-- Partially fixed: 0
-- Skipped: 1 migration finding
-- Remaining risk: migration synchronization and project licensing
+- Fixed: all eight current code-audit findings plus the actionable configuration findings
+- Partially fixed: none
+- Deferred: live PostgreSQL/Linux integration verification
+- Remaining risk: deployment-environment behavior has not been exercised on this Windows host

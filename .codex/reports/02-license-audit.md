@@ -28,7 +28,7 @@ This report identifies license risk signals and is not legal advice.
 - Project license: none declared; absent from npm metadata, all three Rust workspace manifests, and repository legal files.
 - Distribution model stated: `README.md` says builds must be treated as internal-use artifacts until licensing and attribution are resolved.
 - Distribution model assessed: current posture is `Internal Use Only`. The repository also documents separately installed desktop and Debian server artifacts, so any external release is conservatively assessed as `Commercial Closed-Source` because no open-source or other release model is stated.
-- Project license risk: critical for external distribution. The repository provides no recipient permission grant or proprietary distribution terms. Internal use by the copyright owner is a narrower posture and does not clear release artifacts for third parties.
+- Project license risk: acceptable for organization-controlled internal use, assuming ownership and access are controlled. Critical review is still required before providing source or artifacts to third parties because no recipient permission grant or proprietary distribution terms exist.
 
 ## Dependency License Inventory
 
@@ -88,7 +88,7 @@ The table lists every direct production dependency, every workspace package, and
 
 ## Findings
 
-### [CRITICAL] Workspace packages @ 0.3.0 - No project license
+### [INFO FOR INTERNAL USE / CRITICAL FOR EXTERNAL DISTRIBUTION] Workspace packages @ 0.3.0 - No project license
 - Distribution conflict: external distribution of the desktop client, server binary, source archive, or Debian package has no documented recipient permission grant or proprietary terms.
 - Scope: `antminer-fleet-manager`, `antminer-fleet-server`, and `fleet-shared`.
 - Evidence: no project legal file; `npm pkg get license` returned `{}`; Cargo metadata reported empty `license` and `license_file` for every workspace package; `README.md` explicitly limits builds to internal use.
@@ -97,7 +97,7 @@ The table lists every direct production dependency, every workspace package, and
   2. Obtain commercial license: establish approved proprietary distribution terms or an open-source license from the rights holder.
   3. Isolate/restructure usage: keep artifacts strictly internal until terms are approved and applied to all separately distributed components.
   4. Legal review needed: yes, before any third-party release.
-- Urgency: release blocker.
+- Urgency: no blocker for organization-controlled internal operation; external distribution blocker.
 
 ### [HIGH] cssparser 0.36.0, cssparser-macros 0.6.1, dtoa-short 0.3.5, option-ext 0.2.0, selectors 0.36.1 - MPL-2.0
 - Distribution conflict: MPL-2.0 permits larger-work distribution but requires preservation of notices and availability of Source Code Form for covered files when distributing executable form. No process or artifact currently satisfies those obligations.
@@ -147,12 +147,12 @@ The table lists every direct production dependency, every workspace package, and
 - Required follow-up: build on supported target platforms, generate an artifact-level SBOM/license report, inspect embedded assets and notices, and run `license-checker`/equivalent plus `cargo-license` or `cargo-deny` once those tools are approved and available.
 
 ## Summary
-- Critical blockers: one project-wide blocker affecting all three workspace packages: no project license or proprietary recipient terms.
+- Critical blockers: none for organization-controlled internal use; one project-wide blocker before external distribution.
 - High-risk items requiring legal review: five MPL-2.0 Cargo crates and one CC-BY-4.0 npm build-data package.
 - Compliance obligations outstanding: project terms, third-party attribution/license bundle, MPL corresponding-source method, Apache NOTICE/patent review, and final artifact SBOM.
 - Unknown licenses: zero external dependency metadata entries; final artifact inclusion remains unverified.
 
 ## Verdict
-DO NOT DISTRIBUTE
+REVIEW REQUIRED
 
-The current internal-use-only posture is consistent with the repository warning. Do not provide source or built desktop/server artifacts to third parties until project distribution terms and the third-party compliance bundle are approved and included.
+Organization-controlled internal deployment is acceptable under the stated scope, with dependency inventories and applicable upstream notices retained as internal compliance records. Do not provide source or built desktop/server artifacts to third parties until project distribution terms and an artifact-specific compliance bundle are approved.

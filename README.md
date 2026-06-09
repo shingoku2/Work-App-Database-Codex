@@ -1,107 +1,140 @@
 # Antminer Fleet Manager
 
-Self-hosted asset management for Antminer ASIC units and replacement-parts inventory.
+Antminer Fleet Manager is an internal, self-hosted asset-management system for
+Antminer ASIC units and replacement-parts inventory.
 
-The product has two separately installed components:
+It has two separately installed components:
 
-- **Antminer Fleet Server**: Linux systemd service, HTTPS API, authentication, and PostgreSQL database.
-- **Antminer Fleet Client**: Tauri desktop application for Windows/macOS/Linux. It stores no production inventory database and requires a server connection.
+- **Antminer Fleet Server**: a Linux systemd service providing the HTTPS API,
+  named-account authentication, and PostgreSQL persistence.
+- **Antminer Fleet Client**: a Tauri desktop application for Windows, macOS,
+  and Linux. It requires an active server connection and stores no production
+  inventory database.
 
-The application remains focused on asset registry, miner spreadsheet import, lifecycle status, dashboard reporting, and parts inventory. It does not include ticketing or technician workflows.
+The product covers miner registration, spreadsheet import, lifecycle status,
+dashboard reporting, account administration, and parts inventory. It does not
+include ticketing or technician workflows.
 
 ## Repository layout
 
-- `server/`: Axum HTTPS server, PostgreSQL migrations, administrative CLI, SQLite importer, and Debian packaging.
+- `server/`: Axum HTTPS server, PostgreSQL migrations, administrative CLI,
+  SQLite importer, and Debian packaging.
 - `crates/fleet-shared/`: shared API/domain contracts and validation.
-- `src-tauri/`: desktop networking, certificate pinning, credential storage, and Tauri commands.
+- `src-tauri/`: desktop networking, certificate pinning, credential storage,
+  and Tauri commands.
 - `src/`: React user interface.
+- `docs/OPERATIONS.md`: deployment, pairing, backup, and upgrade runbook.
+- `docs/INTERNAL_COMPLIANCE.md`: internal dependency-attribution record and
+  unresolved compliance checks.
 
-## Server installation
+## Deployment overview
 
-The initial package target is Debian/Ubuntu amd64. PostgreSQL must be installed and managed on the server or another operator-controlled host.
+The supported initial server package target is Debian/Ubuntu amd64. PostgreSQL
+may run locally or on another organization-controlled host.
 
-Build and install:
+The deployment sequence is:
 
-```bash
-sh server/scripts/build-deb.sh
-sudo dpkg -i server/package/antminer-fleet-server_0.3.0_amd64.deb
-```
+1. Build and install the Debian package.
+2. Create the PostgreSQL role and database.
+3. Configure `/etc/antminer-fleet/server.toml`.
+4. Generate or install the server TLS certificate.
+5. Validate the configuration and apply migrations.
+6. Create the first administrator.
+7. Start the systemd service and verify `/health`.
+8. Pair each desktop client after independently confirming the certificate
+   SHA-256 fingerprint.
 
-Then:
-
-1. Create the PostgreSQL role/database.
-2. Edit `/etc/antminer-fleet/server.toml`.
-3. Generate/import TLS.
-4. Run migrations.
-5. Create the first administrator.
-6. Enable the service.
-
-See [server/README.md](./server/README.md) for exact commands, certificate fingerprint verification, and legacy `fleet.db` import.
+See [server/README.md](server/README.md) for exact setup commands and
+[docs/OPERATIONS.md](docs/OPERATIONS.md) for the operating runbook.
 
 ## Desktop client
 
-Prerequisites:
+Development prerequisites:
 
 - Node.js 20 or newer.
 - Rust stable.
-- Tauri v2 platform prerequisites.
+- Tauri v2 platform prerequisites for the development host.
 
-Development:
+Install and launch:
 
 ```bash
 npm ci
 npm run tauri:dev
 ```
 
-On first launch:
-
-1. Enter the server HTTPS URL.
-2. Verify the displayed SHA-256 certificate fingerprint with the administrator.
-3. Trust the certificate.
-4. Sign in with a named account.
-
-Each desktop installation stores one server profile. The pinned certificate and server URL are stored in application data; the bearer session token is stored in the operating-system credential manager. Passwords are never persisted.
-
-The client is online-required. When the server cannot be reached, data operations are unavailable. There is no local write queue or offline database.
-
-## Verification
-
-From the repository root:
+On Windows, build the configured NSIS desktop installer:
 
 ```bash
+npm run tauri:build
+```
+
+On first launch, enter the HTTPS server URL, compare the displayed SHA-256
+certificate fingerprint with the value supplied by the server administrator,
+and then sign in with a named account.
+
+Each desktop installation stores one server profile. The server URL, pinned
+certificate, and fingerprint are stored in application data. The bearer
+session token is stored in the operating-system credential manager. Passwords
+and fleet data are not persisted by the desktop client.
+
+The client is online-required. There is no local write queue or offline
+database.
+
+## Development and testing
+
+Run from the repository root:
+
+```bash
+npm ci
 npm run build
 npm test
-cargo check --workspace
-cargo test --workspace
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo fmt --all -- --check
 npm audit --omit=dev
 ```
 
-Database-backed integration tests are not yet included.
+The current automated suite covers frontend behavior, shared validation,
+server configuration rejection, login-limiter behavior, exact certificate
+matching, saved-profile recovery, and command path encoding.
 
-## API and security
+Live PostgreSQL concurrency/migration tests, a real HTTPS certificate
+substitution test, a packaged Tauri/keyring flow, and Debian/systemd validation
+are not currently automated. See the accuracy flags in
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Security model
 
 - API prefix: `/api/v1`.
 - Password hashing: Argon2id.
-- Authentication: revocable opaque bearer sessions, stored hashed on the server.
+- Authentication: revocable opaque bearer sessions stored hashed on the
+  server.
 - Roles: `admin` and `user`.
-- TLS: direct server HTTPS; the desktop accepts only the exact paired leaf certificate.
-- Optimistic concurrency: miners, parts, and users carry numeric versions; stale edits/deletes return conflict errors.
+- TLS: direct server HTTPS; paired clients accept only the exact paired leaf
+  certificate.
+- Concurrency: miners, parts, and users carry numeric versions; stale writes
+  return conflict errors.
 - Server request bodies are limited to 30 MB.
 - Login attempts use bounded, expiring source-and-account limits.
+- The final enabled administrator cannot be disabled or demoted.
 
-Admins can create/disable users, assign roles, and reset passwords. The final enabled administrator cannot be disabled or demoted.
+## Existing SQLite data
 
-## Existing data
+Legacy desktop `fleet.db` data moves to PostgreSQL only through the server CLI.
+The importer defaults to a dry-run preview and requires an explicit conflict
+policy when changes are applied. Desktop clients do not upload local databases
+automatically.
 
-The server CLI imports the old desktop SQLite `fleet.db` with a dry-run preview and explicit conflict policy:
+See [SQLite migration](docs/OPERATIONS.md#sqlite-migration).
 
-```bash
-antminer-fleet-server --config /etc/antminer-fleet/server.toml \
-  import-sqlite /path/to/fleet.db
-```
+## Internal-use status
 
-The server becomes the sole source of truth after import. Desktop clients never upload local databases automatically. Spreadsheet import is administrator-only and insert-only: existing serials are reported as conflicts instead of overwritten.
+This repository is operated as an internal application, not a public
+distribution. Internal use still requires the organization to retain
+third-party license and notice records and to reassess obligations before
+sharing source or binaries outside the organization.
 
-## Distribution status
-
-The repository does not currently declare a project license or generate a third-party attribution bundle. Treat builds as internal-use artifacts until those obligations are resolved.
+The current compliance record is
+[docs/INTERNAL_COMPLIANCE.md](docs/INTERNAL_COMPLIANCE.md). It is an inventory
+and operating record, not a complete artifact-level third-party notices bundle
+or legal opinion.

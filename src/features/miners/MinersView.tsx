@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Panel, fieldClass, primaryButtonClass, secondaryButtonClass, textareaClass } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { invalidateFleetData } from "@/lib/queryInvalidation";
 import type { Miner, MinerModel, MinerStatus } from "@/types/db";
 import { createMiner, deleteMiner, importMiners, listMiners, updateMiner, type CreateMinerInput } from "./minerApi";
 import {
@@ -52,8 +53,7 @@ export function MinersView({ canImport }: { canImport: boolean }) {
     mutationFn: ({ id, version }: Pick<Miner, "id" | "version">) => deleteMiner(id, version),
     onSuccess: async () => {
       setView({ type: "list" });
-      await queryClient.invalidateQueries({ queryKey: ["miners"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateFleetData(queryClient, "miners");
     },
   });
 
@@ -62,8 +62,7 @@ export function MinersView({ canImport }: { canImport: boolean }) {
     onSuccess: async (result) => {
       setImportIsError(false);
       setImportMessage(formatImportMessage(result));
-      await queryClient.invalidateQueries({ queryKey: ["miners"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateFleetData(queryClient, "miners");
     },
   });
 
@@ -234,8 +233,7 @@ function MinerDetailView({
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["miners"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateFleetData(queryClient, "miners");
       onBack();
     },
   });

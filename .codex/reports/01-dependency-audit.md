@@ -42,13 +42,13 @@
 
 ## Findings
 
-### [HIGH] Workspace packages @ 0.3.0 - No project license blocks external distribution
+### [INFO] Workspace packages @ 0.3.0 - Internal-use project has no external distribution terms
 - Manifest: `package.json`, `crates/fleet-shared/Cargo.toml`, `server/Cargo.toml`, `src-tauri/Cargo.toml`
 - Scope: direct/project licensing
 - Issue: The root npm package and all three Rust workspace packages omit license metadata, and no root `LICENSE` file exists.
 - Evidence: Cargo metadata reports the three workspace packages as the only packages without license metadata. `README.md` explicitly states that the repository has no project license and that builds must be treated as internal-use artifacts. The repository also contains a Debian package builder, so distributable output is contemplated.
-- Risk: External users or operators receive no permission grant to copy, install, modify, or redistribute the project. This is a release/distribution blocker even though third-party packages may individually permit distribution.
-- Recommendation: Select and add an approved project license, add matching npm/Cargo manifest metadata, and review whether server/client distribution terms need to differ.
+- Risk: This does not block organization-controlled internal deployment. It does block providing source or artifacts to third parties until approved terms exist.
+- Recommendation: Keep the repository and artifacts internal. Select approved project terms and matching manifest metadata before any external distribution.
 - Verification command: `cargo metadata --format-version 1 --locked --no-deps` and `npm pkg get license`
 
 ### [MEDIUM] Third-party dependency set - Attribution and MPL-2.0 obligations are not packaged
@@ -107,24 +107,24 @@
 
 ## Summary Metrics
 - Critical findings: 0
-- High findings: 1
+- High findings: 0
 - Medium findings: 2
 - Low findings: 1
-- Info findings: 2
+- Info findings: 3
 - npm advisory vulnerabilities: 0
 - Rust advisory vulnerabilities: unknown; scan blocked by missing tool
-- License conflicts: 1 project-level distribution blocker; 0 confirmed third-party incompatibilities
+- License conflicts: 0 for internal operation; 1 project-level blocker for external distribution; 0 confirmed third-party incompatibilities
 - Unknown licenses: 3 workspace packages; 0 external npm/Cargo packages
 - Unused dependency candidates: 4 direct npm packages
 
 ## Verdict
-BLOCKED
+ISSUES FOUND
 
-The dependency trees are locked, registry-sourced, and npm's live audit is clean. Release or external distribution remains blocked by the missing project license and missing third-party attribution process. Rust vulnerability status must also be verified before release.
+The dependency trees are locked, registry-sourced, and npm's live audit is clean. Organization-controlled internal deployment is not blocked by the absent project license. External distribution remains blocked until project terms and an artifact-specific third-party attribution process exist. Rust vulnerability status remains unverified because `cargo-audit` was unavailable.
 
 ## Next Actions
-1. Choose and apply a project license, including npm and Cargo metadata.
-2. Add automated third-party license/notice generation to desktop and Debian packaging.
-3. Install and run `cargo audit --locked` in CI or a controlled audit environment.
-4. Confirm and remove the four apparently unused npm direct dependencies in a fixer stage.
-5. Apply compatible npm patch/minor updates, then evaluate major upgrades separately.
+1. Install and run `cargo audit --locked` in CI or a controlled audit environment.
+2. Retain the locked dependency inventory and upstream notices with internal deployment records.
+3. Confirm and remove the four apparently unused npm direct dependencies in a future maintenance pass.
+4. Apply compatible npm patch/minor updates, then evaluate major upgrades separately.
+5. Before any external distribution, approve project terms and generate artifact-specific third-party notices.

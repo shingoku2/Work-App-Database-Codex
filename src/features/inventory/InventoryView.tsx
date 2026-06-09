@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Panel, fieldClass, primaryButtonClass, secondaryButtonClass, textareaClass } from "@/components/ui/Panel";
+import { invalidateFleetData } from "@/lib/queryInvalidation";
 import type { Part, PartCategory } from "@/types/db";
 import { createPart, deletePart, listParts, updatePart } from "./partApi";
 
@@ -31,16 +32,14 @@ export function InventoryView() {
     onSuccess: async () => {
       setForm(emptyPart);
       setEditingSku(null);
-      await queryClient.invalidateQueries({ queryKey: ["parts"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateFleetData(queryClient, "parts");
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: ({ sku, version }: Pick<Part, "sku" | "version">) => deletePart(sku, version),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["parts"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await invalidateFleetData(queryClient, "parts");
     },
   });
 

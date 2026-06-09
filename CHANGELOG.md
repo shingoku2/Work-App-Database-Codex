@@ -7,30 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- Replaced the desktop-owned local SQLite architecture with a separately
+  installed central server backed by PostgreSQL. The desktop client is now
+  online-required and cannot read or write the legacy local `fleet.db`
+  directly.
+- Operators must install and configure the server, apply its PostgreSQL
+  migrations, create the first administrator, start the HTTPS service, and
+  pair each desktop before users can access fleet data.
+- Existing SQLite data is not migrated automatically. An operator must copy
+  the legacy `fleet.db` to the server and run the server-side `import-sqlite`
+  CLI, beginning with a dry run and then selecting an explicit `abort`,
+  `server-wins`, or `import-wins` conflict policy.
+- Part costs now use integer cents throughout the API and PostgreSQL schema.
+  Existing PostgreSQL floating-point values and imported SQLite values are
+  converted by multiplying by 100 and rounding to the nearest cent.
+
 ### Added
-- Added a separately installed Rust HTTPS server backed by PostgreSQL, with Debian/systemd packaging and administrative CLI commands.
-- Added named accounts, Argon2id password hashing, revocable sessions, Admin/User roles, login throttling, and account administration.
-- Added certificate-fingerprint pairing and certificate pinning for one configured server per desktop installation.
-- Added a server-side dry-run/apply importer for existing desktop `fleet.db` files with explicit conflict policies.
-- Added optimistic concurrency versions for miners, parts, and users.
+- Added a separately installed Rust HTTPS server backed by PostgreSQL, with a
+  Debian package definition, systemd unit, database migrations, health
+  endpoint, and administrative CLI.
+- Added named accounts with `admin` and `user` roles. Administrators can create
+  and disable accounts, assign roles, and reset passwords; the final enabled
+  administrator cannot be disabled or demoted.
+- Added Argon2id password hashing and revocable opaque sessions. Desktop
+  session tokens are stored in the operating-system credential manager.
+- Added first-launch server pairing for one configured server per desktop.
+  Users must compare the complete SHA-256 certificate fingerprint through an
+  independent trusted channel before accepting the server.
+- Added exact leaf-certificate pinning for all requests after pairing.
+  Replacing the server certificate requires clients to forget and re-pair the
+  server.
+- Added a dry-run/apply SQLite importer with explicit conflict reporting and
+  transactional conflict policies.
+- Added optimistic concurrency versions for miners, parts, and users so stale
+  updates and deletes return conflicts instead of silently overwriting newer
+  changes.
 
 ### Changed
-- Converted the Tauri application from a local SQLite owner into an online-required remote client.
-- Moved all production migrations and database access to the central server.
-- Store desktop session tokens in the operating-system credential manager.
-- Store part costs as exact integer cents instead of binary floating point.
-- Made spreadsheet miner import administrator-only and conflict-preserving.
+- Converted the Tauri application into an online-required client of the
+  central HTTPS API. It no longer stores the production fleet database.
+- Moved production database ownership and migrations to the central server.
+- Made spreadsheet miner import administrator-only and insert-only for
+  existing serial numbers; conflicts are reported rather than overwritten.
+- Store and transport part costs as exact integer cents instead of binary
+  floating point.
 
 ### Fixed
-- Enforced exact paired-certificate verification and recoverable versioned desktop server profiles.
-- Added bounded source-aware login throttling and transactional final-administrator protection.
-- Hardened server configuration validation and removed plaintext password CLI arguments.
-- Normalized miner serials at the backend boundary so manual create/update and bulk import treat whitespace-equivalent serials as the same asset identity.
-- Applied the same supported model and lifecycle-status validation to bulk imports that manual miner writes already use; invalid batches are rejected before database mutation.
-- Return explicit not-found errors when an update or delete targets a miner or inventory part that no longer exists.
+- Preserved the login form after pairing, logout, or local credential loss so a
+  paired client can authenticate again without forgetting the server.
+- Quarantine malformed saved client configuration instead of preventing the
+  desktop application from starting.
+- Added bounded, expiring, source-aware login throttling.
+- Hardened server configuration validation for PostgreSQL URLs, connection
+  limits, session duration, TLS paths, PEM parsing, and matching certificate
+  and private-key material.
+- Removed plaintext password command arguments from administrator CLI flows;
+  use hidden prompts or protected standard input.
+- Normalized miner serials at the server boundary and applied the same model
+  and lifecycle-status validation to manual and spreadsheet writes.
+- Return explicit not-found errors when an update or delete targets a miner or
+  inventory part that no longer exists.
+- Percent-encode inventory SKU path segments for update and delete requests.
 
 ### Security
-- Documented that builds are internal-use only until the project declares a license and assembles required third-party license attribution.
+- Require named authentication for fleet operations and restrict account
+  administration and spreadsheet import to administrators.
+- Pin the exact certificate accepted during fingerprint-confirmed pairing
+  rather than extending the desktop's normal certificate trust store.
+- Limit server request bodies to 30 MB and keep login-throttle state bounded.
+
+### Upgrade Instructions
+1. Prepare the Debian/Ubuntu server and PostgreSQL database described in
+   `server/README.md`.
+2. Configure TLS and `/etc/antminer-fleet/server.toml`, then run
+   `validate-config` and `migrate`.
+3. Create the first administrator and start the systemd service.
+4. If upgrading from the local SQLite desktop release, preserve the original
+   `fleet.db`, run `import-sqlite` without `--apply`, review the reported
+   conflicts, and then apply one explicit conflict policy.
+5. Verify record counts and representative miner and part records before
+   treating PostgreSQL as the source of truth.
+6. Distribute the server certificate fingerprint through a trusted channel,
+   pair each desktop, and sign in with a named account.
+
+Detailed installation, migration, pairing, backup, and rollback preparation
+are documented in `server/README.md` and `docs/OPERATIONS.md`.
+
+### Validation Status
+- Passed: `cargo check --workspace --locked`.
+- Passed: `cargo test --workspace --locked` with 13 Rust tests.
+- Passed: `npm test` with 87 frontend tests.
+- Passed: `npm run build`, `cargo fmt --all -- --check`,
+  `git diff --check`, and `npm audit --omit=dev` with zero reported npm
+  vulnerabilities.
+- Not yet verified on target infrastructure: Debian package installation,
+  systemd operation, live local or remote PostgreSQL migrations and
+  concurrency, populated currency migration, SQLite conflict races,
+  PostgreSQL backup/restore, certificate substitution or rotation, and a
+  packaged Tauri/keyring pairing and re-login flow.
+- Rust advisory status remains unverified because `cargo-audit` was not
+  available in the validation environment.
 
 ## [0.2.0] - 2026-06-02
 
