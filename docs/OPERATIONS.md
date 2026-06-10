@@ -29,6 +29,13 @@ The pairing request retrieves the server certificate while TLS validation is
 temporarily disabled. Security therefore depends on comparing the displayed
 SHA-256 fingerprint through an independent trusted channel.
 
+For organization-built clients, set `VITE_FLEET_SERVER_URL` in
+`.env.production.local` before `npm run tauri:build`. The first-run pairing
+form will be pre-filled with that HTTPS origin. The setting is public build
+configuration, so it must not contain credentials, tokens, certificate private
+keys, or other secrets. Users must still verify and approve the certificate
+fingerprint.
+
 The administrator obtains the expected value:
 
 ```bash
@@ -49,6 +56,30 @@ If the server becomes unavailable because the certificate changed, use
 **Forget Server and Re-pair** and verify the new fingerprint. Re-pairing
 removes the saved server profile and local session credential; it does not
 delete server data.
+
+### Windows SSH tunnel helper
+
+For deployments that still require an SSH jump host, configure
+`scripts/fleet-tunnel.local.json` from the provided example. The helper uses
+Windows OpenSSH with `BatchMode`, `ExitOnForwardFailure`, and keepalives, then
+runs the tunnel without a visible terminal window. Key-based or SSH-agent
+authentication is required; the helper never accepts or stores an SSH
+password.
+
+Set `identity_file` when using a dedicated Fleet tunnel key. Install only its
+public key in the SSH account's `authorized_keys`, preferably restricted to
+local forwarding for the Fleet endpoint. Keep the private key on the client
+with user-only permissions.
+
+Start it by double-clicking `Start Fleet Tunnel.cmd` or with
+`npm run tunnel:start`. Use `npm run tunnel:status` and
+`npm run tunnel:stop` for diagnostics and shutdown. This is an operational
+convenience, not a replacement for a managed VPN or private access network.
+
+When the backend reverse-tunnel service is enabled, configure the Windows
+forward's remote target as `127.0.0.1:8443` on the SSH host. The reverse
+tunnel owns that host-loopback listener and carries traffic onward to the
+container. Do not configure desktop clients with the container IP.
 
 ## Account recovery
 

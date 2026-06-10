@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Panel";
+import { initialServerUrl } from "@/config/server";
 import type { PairingInfo, User } from "@/types/db";
 import { getConnectionState, login, pairServer, probeServer, unpairServer } from "./connectionApi";
 
@@ -46,7 +47,7 @@ export function ConnectionGate({
 }
 
 function PairingView({ onComplete }: { onComplete: () => void }) {
-  const [url, setUrl] = useState("https://");
+  const [url, setUrl] = useState(initialServerUrl);
   const [pairing, setPairing] = useState<PairingInfo | null>(null);
   const probe = useMutation({ mutationFn: probeServer, onSuccess: setPairing });
   const pair = useMutation({

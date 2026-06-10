@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.env*
+!.env.example
+scripts/fleet-tunnel.local.json
 
 src-tauri/target/
 src-tauri/gen/

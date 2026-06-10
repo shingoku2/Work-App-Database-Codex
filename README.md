@@ -68,6 +68,11 @@ On Windows, build the configured NSIS desktop installer:
 npm run tauri:build
 ```
 
+To ship a client preconfigured for the hosted server, copy `.env.example` to
+`.env.production.local`, set `VITE_FLEET_SERVER_URL` to the hosted HTTPS
+origin, and build the installer. This value is embedded in the frontend and
+must contain only the server origin, never credentials or private material.
+
 On first launch, enter the HTTPS server URL, compare the displayed SHA-256
 certificate fingerprint with the value supplied by the server administrator,
 and then sign in with a named account.
@@ -79,6 +84,36 @@ and fleet data are not persisted by the desktop client.
 
 The client is online-required. There is no local write queue or offline
 database.
+
+### Windows SSH tunnel helper
+
+When the server is reachable only through SSH, copy
+`scripts/fleet-tunnel.example.json` to
+`scripts/fleet-tunnel.local.json` and set `ssh_destination` to
+`USER@REMOTE_HOST` or an SSH config alias. SSH key or agent authentication must
+already work without a password prompt.
+
+For a dedicated key, set `identity_file` to a local private-key path such as
+`%USERPROFILE%\.ssh\antminer_fleet_tunnel`. Only the matching public key is
+installed on the SSH host; never copy the private key into the repository or
+server.
+
+Users can then double-click `scripts/Start Fleet Tunnel.cmd`, or run:
+
+```powershell
+npm run tunnel:start
+npm run tunnel:status
+npm run tunnel:stop
+```
+
+The tunnel runs in a hidden background process, forwards local port `8443` to
+the configured server target, rejects forwarding startup failures, and uses
+SSH keepalives. The local config is ignored by Git and must not contain
+passwords or private-key contents.
+
+In the packaged backend topology, the backend reverse tunnel publishes Fleet
+Server on the SSH host's `127.0.0.1:8443`. The Windows helper therefore uses
+`remote_host: "127.0.0.1"`; clients do not route directly to the container IP.
 
 ## Development and testing
 

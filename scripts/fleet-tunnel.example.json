@@ -1,0 +1,8 @@
+{
+  "ssh_destination": "CHANGE_ME_USER@CHANGE_ME_REMOTE_HOST",
+  "ssh_port": 22,
+  "identity_file": "%USERPROFILE%\\.ssh\\antminer_fleet_tunnel",
+  "local_port": 8443,
+  "remote_host": "127.0.0.1",
+  "remote_port": 8443
+}
