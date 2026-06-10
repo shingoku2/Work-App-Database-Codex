@@ -3,6 +3,7 @@ Version: 0.3.0
 Section: admin
 Priority: optional
 Architecture: amd64
+Depends: openssh-client, curl
 Recommends: postgresql
 Maintainer: Antminer Fleet Administrator
 Description: Central HTTPS and PostgreSQL server for Antminer Fleet Manager

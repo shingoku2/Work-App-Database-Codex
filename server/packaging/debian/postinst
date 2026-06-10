@@ -9,6 +9,7 @@ if ! getent passwd antminer-fleet >/dev/null; then
 fi
 
 install -d -m 0750 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet
+install -d -m 0700 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet/.ssh
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet/tls
 
@@ -18,3 +19,4 @@ fi
 
 systemctl daemon-reload
 echo "Edit /etc/antminer-fleet/server.toml, generate TLS, create the database, then enable the service."
+echo "Optional reverse tunnel: install tunnel.conf and the SSH identity, then enable antminer-fleet-tunnel.service."
