@@ -10,6 +10,8 @@ import { createPart, deletePart, listParts, updatePart } from "./partApi";
 const categories: PartCategory[] = ["Hashboard", "Control Board", "PSU", "Fan", "Cable", "Misc"];
 
 const emptyPart: Part = {
+  site_id: 0,
+  site_name: null,
   sku: "",
   name: "",
   category: "Misc",

@@ -51,6 +51,8 @@ describe("ConnectionGate", () => {
   it("signs in again from an unauthenticated saved-server state", async () => {
     const user = {
       id: 1,
+      site_id: null,
+      site_name: null,
       username: "admin",
       display_name: "Administrator",
       role: "admin" as const,

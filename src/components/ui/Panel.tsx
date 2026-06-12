@@ -22,4 +22,4 @@ export const secondaryButtonClass =
   "rounded-md border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const codeClass =
-  "block p-3 rounded-md bg-black/30 border border-white/10 text-xs text-sky-100 font-mono overflow-x-auto whitespace-pre-wrap";
+  "font-mono rounded bg-white/5 px-1.5 py-0.5 text-xs text-sky-200";

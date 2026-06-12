@@ -3,6 +3,8 @@ import type { CreateMinerInput, MinerImportResult } from "@/features/miners/mine
 
 export const sampleMiner: Miner = {
   id: 1,
+  site_id: 1,
+  site_name: "DEP_TX05",
   serial: "ANT-001",
   model: "S21",
   firmware: "1.2.3",
@@ -44,6 +46,8 @@ export const sampleMinerInput: CreateMinerInput = {
 };
 
 export const samplePart: Part = {
+  site_id: 1,
+  site_name: "DEP_TX05",
   sku: "HSB-S21",
   name: "S21 Hashboard",
   category: "Hashboard",

@@ -63,6 +63,7 @@ pub struct CreateUserRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateUserRequest {
+    pub id: i64,
     pub site_id: Option<i64>,
     pub display_name: String,
     pub role: UserRole,
@@ -219,6 +220,10 @@ pub struct DashboardSummary {
     pub low_stock_parts: Vec<Part>,
 }
 
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLogEntry {
     pub id: i64,
@@ -235,7 +240,7 @@ pub struct AuditLogEntry {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AuditLogQuery {
     pub user_id: Option<i64>,
     pub action: Option<String>,
@@ -247,11 +252,16 @@ pub struct AuditLogQuery {
     pub offset: Option<i64>,
 }
 
+// ---------------------------------------------------------------------------
+// Webhooks
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Webhook {
     pub id: i64,
     pub name: String,
     pub url: String,
+    /// Always returned as "********" when a secret is set; null when no secret.
     pub secret: Option<String>,
     pub events: Vec<String>,
     pub enabled: bool,
@@ -272,6 +282,7 @@ pub struct UpdateWebhook {
     pub id: i64,
     pub name: String,
     pub url: String,
+    /// null / "" / "********" → preserve existing secret.  Other non-empty value → replace.
     pub secret: Option<String>,
     pub events: Vec<String>,
     pub enabled: bool,
@@ -292,6 +303,10 @@ pub struct WebhookDelivery {
     pub created_at: String,
     pub delivered_at: Option<String>,
 }
+
+// ---------------------------------------------------------------------------
+// Sites
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Site {
@@ -321,22 +336,14 @@ pub struct UpdateSite {
     pub version: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SiteQuery {
     pub site_id: Option<i64>,
 }
 
-pub const WEBHOOK_EVENTS: &[&str] = &[
-    "miner.created",
-    "miner.updated",
-    "miner.deleted",
-    "part.created",
-    "part.updated",
-    "part.deleted",
-    "user.created",
-    "user.updated",
-    "user.deleted",
-];
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
 
 pub fn normalize_username(username: &str) -> String {
     username.trim().to_lowercase()

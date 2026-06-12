@@ -1,7 +1,7 @@
 import { command } from "@/lib/tauri";
 import type { Miner } from "@/types/db";
 
-export type CreateMinerInput = Omit<Miner, "id" | "version">;
+export type CreateMinerInput = Omit<Miner, "id" | "version" | "site_id" | "site_name"> & { site_id?: number | null };
 export type UpdateMinerInput = Miner;
 
 export interface MinerImportResult {

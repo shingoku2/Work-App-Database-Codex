@@ -4,6 +4,8 @@ export type PartCategory = "Hashboard" | "Control Board" | "PSU" | "Fan" | "Cabl
 
 export interface Miner {
   id: number;
+  site_id: number;
+  site_name: string | null;
   serial: string;
   model: MinerModel;
   firmware: string | null;
@@ -25,6 +27,8 @@ export interface Miner {
 }
 
 export interface Part {
+  site_id: number;
+  site_name: string | null;
   sku: string;
   name: string;
   category: PartCategory;
@@ -48,6 +52,8 @@ export type UserRole = "admin" | "user";
 
 export interface User {
   id: number;
+  site_id: number | null;
+  site_name: string | null;
   username: string;
   display_name: string;
   role: UserRole;
@@ -74,4 +80,111 @@ export interface ConnectionState {
   fingerprint_sha256: string | null;
   user: User | null;
   error: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+export interface AuditLogEntry {
+  id: number;
+  user_id: number | null;
+  username: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_serial: string | null;
+  old_values: unknown | null;
+  new_values: unknown | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface AuditLogQuery {
+  user_id?: number | null;
+  action?: string | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number | null;
+  offset?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks
+// ---------------------------------------------------------------------------
+
+/** secret is always "********" when set; null when no secret configured */
+export interface Webhook {
+  id: number;
+  name: string;
+  url: string;
+  secret: string | null;
+  events: string[];
+  enabled: boolean;
+  version: number;
+}
+
+export interface CreateWebhook {
+  name: string;
+  url: string;
+  secret: string | null;
+  events: string[];
+  enabled: boolean;
+}
+
+export interface UpdateWebhook {
+  id: number;
+  name: string;
+  url: string;
+  /** null / "" / "********" preserves existing secret; new non-empty value replaces it */
+  secret: string | null;
+  events: string[];
+  enabled: boolean;
+  version: number;
+}
+
+export interface WebhookDelivery {
+  id: number;
+  webhook_id: number;
+  event: string;
+  payload: unknown;
+  response_status: number | null;
+  response_body: string | null;
+  success: boolean;
+  error: string | null;
+  attempts: number;
+  created_at: string;
+  delivered_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Sites
+// ---------------------------------------------------------------------------
+
+export interface Site {
+  id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  enabled: boolean;
+  version: number;
+}
+
+export interface CreateSite {
+  name: string;
+  code: string;
+  description: string | null;
+  enabled: boolean;
+}
+
+export interface UpdateSite {
+  id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  enabled: boolean;
+  version: number;
 }

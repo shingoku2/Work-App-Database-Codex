@@ -52,6 +52,8 @@ export function updateUser(input: User): Promise<User> {
   return command<User>("update_user", {
     id: input.id,
     input: {
+      id: input.id,
+      site_id: input.site_id ?? null,
       display_name: input.display_name,
       role: input.role,
       enabled: input.enabled,

@@ -227,7 +227,7 @@ function MinerDetailView({
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (miner) {
-        await updateMiner({ ...form, id: miner.id, version: miner.version });
+        await updateMiner({ ...form, id: miner.id, version: miner.version, site_id: miner.site_id, site_name: miner.site_name });
       } else {
         await createMiner(form);
       }

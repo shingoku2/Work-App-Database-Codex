@@ -20,6 +20,8 @@ const pairing: PairingInfo = {
 };
 const user: User = {
   id: 1,
+  site_id: null,
+  site_name: null,
   username: "admin",
   display_name: "Administrator",
   role: "admin",
@@ -60,6 +62,8 @@ describe("connection API", () => {
     expect(mockedCommand).toHaveBeenNthCalledWith(2, "update_user", {
       id: 1,
       input: {
+        id: 1,
+        site_id: null,
         display_name: "Administrator",
         role: "admin",
         enabled: true,
