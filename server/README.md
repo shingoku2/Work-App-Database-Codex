@@ -152,6 +152,35 @@ sudo systemctl restart antminer-fleet-server
 Avoid `trace` logging during normal operation because verbose request and
 dependency diagnostics may expose operational metadata.
 
+## Optional automatic reverse SSH tunnel
+
+For a server running inside a container without a published HTTPS port, the
+package includes a companion service that keeps a reverse SSH forward alive.
+Install the deployment-specific configuration and SSH files:
+
+```bash
+sudo install -m 0640 -o root -g antminer-fleet \
+  /usr/share/doc/antminer-fleet-server/tunnel.example.conf \
+  /etc/antminer-fleet/tunnel.conf
+sudo install -d -m 0700 -o antminer-fleet -g antminer-fleet \
+  /var/lib/antminer-fleet/.ssh
+sudo install -m 0600 -o antminer-fleet -g antminer-fleet HOST_FORWARD_KEY \
+  /var/lib/antminer-fleet/.ssh/host_forward
+sudo install -m 0600 -o antminer-fleet -g antminer-fleet HOST_KNOWN_HOSTS \
+  /var/lib/antminer-fleet/.ssh/known_hosts
+sudo systemctl enable antminer-fleet-tunnel.service
+sudo systemctl restart antminer-fleet-server.service
+```
+
+Edit `tunnel.conf` for the SSH host/user and forwarding ports before enabling
+the service. The SSH account must authorize the public half of
+`host_forward`. The tunnel binds to host loopback by default, so a laptop can
+use its own SSH local forward without exposing the server port to the LAN.
+
+The tunnel service is started with the server, checks `/health` before
+connecting, uses SSH keepalives, and reconnects after failures. Never place the
+private key in the repository or package.
+
 ## Certificate fingerprint and client pairing
 
 Display the server certificate SHA-256 fingerprint:
