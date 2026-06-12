@@ -100,6 +100,8 @@ pub async fn reset_password(
 pub fn user_from_row(row: &sqlx::postgres::PgRow) -> User {
     User {
         id: row.get("id"),
+        site_id: row.try_get("site_id").unwrap_or(None),
+        site_name: row.try_get("site_name").unwrap_or(None),
         username: row.get("username"),
         display_name: row.get("display_name"),
         role: if row.get::<String, _>("role") == "admin" {

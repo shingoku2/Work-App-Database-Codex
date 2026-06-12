@@ -1,0 +1,31 @@
+CREATE TABLE webhooks (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    secret TEXT,
+    events TEXT[] NOT NULL DEFAULT '{}',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    version BIGINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_webhooks_enabled ON webhooks(enabled);
+
+-- Webhook delivery log for debugging
+CREATE TABLE webhook_deliveries (
+    id BIGSERIAL PRIMARY KEY,
+    webhook_id BIGINT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+    event TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    response_status INT,
+    response_body TEXT,
+    success BOOLEAN NOT NULL,
+    error TEXT,
+    attempts INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    delivered_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
+CREATE INDEX idx_webhook_deliveries_created_at ON webhook_deliveries(created_at DESC);

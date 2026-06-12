@@ -101,6 +101,7 @@ dependencies = [
 name = "antminer-fleet-manager"
 version = "0.3.0"
 dependencies = [
+ "dirs",
  "fleet-shared",
  "keyring",
  "reqwest 0.12.28",
@@ -128,6 +129,7 @@ dependencies = [
  "fleet-shared",
  "rand 0.9.4",
  "rcgen",
+ "reqwest 0.12.28",
  "rpassword",
  "rustls",
  "rustls-pemfile",

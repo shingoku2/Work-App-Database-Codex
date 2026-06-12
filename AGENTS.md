@@ -17,6 +17,42 @@ General rules for all Codex work in this repository:
 - Preserve public APIs unless a task explicitly allows breaking changes.
 - When writing reports, place them in `.codex/reports/`.
 
+## Current Architecture
+
+- The product is an internal, online-required Tauri desktop client plus a
+  separately hosted Linux/PostgreSQL server. Do not reintroduce local
+  production SQLite ownership in the desktop.
+- React calls typed Tauri commands; Rust performs authenticated HTTPS requests
+  to the server and pins the exact paired leaf certificate.
+- Preserve fingerprint confirmation, exact certificate pinning, named-user
+  authentication, revocable bearer sessions, optimistic concurrency versions,
+  and role enforcement.
+- `VITE_FLEET_SERVER_URL` is public build configuration used only to prefill
+  first-run pairing. It must contain an HTTPS origin, never credentials,
+  tokens, certificates, keys, or other secrets.
+
+## SSH Tunnel Deployment
+
+- The packaged backend reverse tunnel publishes Fleet Server on the SSH host's
+  `127.0.0.1:8443`. Windows clients create a local forward from
+  `127.0.0.1:8443` to that host-loopback endpoint. Do not configure clients to
+  route directly to a container IP.
+- Windows tunnel automation lives in `scripts/fleet-tunnel.ps1` with example
+  configuration in `scripts/fleet-tunnel.example.json`.
+- `scripts/fleet-tunnel.local.json`, `.env.local`,
+  `.env.production.local`, and SSH private keys are machine-specific and must
+  remain ignored and uncommitted.
+- Tunnel automation must use non-interactive public-key or agent
+  authentication, strict host-key verification, `ExitOnForwardFailure`, and
+  keepalives. Never add password storage or an insecure host-key bypass.
+- Treat the certificate fingerprint as public verification data, but never
+  expose the TLS private key, SSH private key, database credential, user
+  password, or bearer token.
+- When changing tunnel behavior, validate start, status, stop, duplicate-port
+  rejection, `/health`, `/pairing`, API version compatibility, and the exact
+  expected certificate fingerprint. Use a temporary local port when a working
+  user tunnel must remain uninterrupted.
+
 ## Pipeline Order
 
 1. `CODEX_DEP_AUDITOR.md`

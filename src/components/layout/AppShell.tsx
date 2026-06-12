@@ -1,8 +1,8 @@
-import { Boxes, Gauge, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
+import { Boxes, ClipboardList, Gauge, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import type { User } from "@/types/db";
 
-export type ViewKey = "dashboard" | "units" | "inventory" | "accounts" | "settings";
+export type ViewKey = "dashboard" | "units" | "inventory" | "accounts" | "audit" | "settings";
 
 const baseNav = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,7 +25,12 @@ export function AppShell({
 }) {
   const nav = [
     ...baseNav,
-    ...(user.role === "admin" ? [{ key: "accounts" as const, label: "Accounts", icon: Users }] : []),
+    ...(user.role === "admin"
+      ? [
+          { key: "accounts" as const, label: "Accounts", icon: Users },
+          { key: "audit" as const, label: "Audit Log", icon: ClipboardList },
+        ]
+      : []),
     { key: "settings" as const, label: "Settings", icon: Settings },
   ];
   return (

@@ -1,8 +1,8 @@
 use crate::client::{ClientState, ConnectionState};
 use fleet_shared::{
-    ChangePasswordRequest, CreateMiner, CreatePart, CreateUserRequest, DashboardSummary,
-    LoginResponse, Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest, UpdateMiner,
-    UpdateUserRequest, User,
+    AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CreateMiner, CreatePart, CreateUserRequest,
+    DashboardSummary, LoginResponse, Miner, MinerImportResult, PairingInfo, Part,
+    ResetPasswordRequest, UpdateMiner, UpdateUserRequest, User,
 };
 use tauri::State;
 
@@ -191,4 +191,49 @@ pub async fn get_dashboard_summary(
     state: State<'_, ClientState>,
 ) -> Result<DashboardSummary, String> {
     state.get("/api/v1/dashboard").await
+}
+
+#[tauri::command]
+pub async fn list_audit_log(
+    state: State<'_, ClientState>,
+    query: AuditLogQuery,
+) -> Result<Vec<AuditLogEntry>, String> {
+    let mut path = String::from("/api/v1/audit-log?");
+    let mut params = Vec::new();
+    if let Some(user_id) = query.user_id {
+        params.push(format!("user_id={}", user_id));
+    }
+    if let Some(action) = query.action {
+        if !action.is_empty() {
+            params.push(format!("action={}", urlencoding::encode(&action)));
+        }
+    }
+    if let Some(target_type) = query.target_type {
+        if !target_type.is_empty() {
+            params.push(format!("target_type={}", urlencoding::encode(&target_type)));
+        }
+    }
+    if let Some(target_id) = query.target_id {
+        if !target_id.is_empty() {
+            params.push(format!("target_id={}", urlencoding::encode(&target_id)));
+        }
+    }
+    if let Some(from) = query.from {
+        if !from.is_empty() {
+            params.push(format!("from={}", urlencoding::encode(&from)));
+        }
+    }
+    if let Some(to) = query.to {
+        if !to.is_empty() {
+            params.push(format!("to={}", urlencoding::encode(&to)));
+        }
+    }
+    if let Some(limit) = query.limit {
+        params.push(format!("limit={}", limit));
+    }
+    if let Some(offset) = query.offset {
+        params.push(format!("offset={}", offset));
+    }
+    path.push_str(&params.join("&"));
+    state.get(&path).await
 }

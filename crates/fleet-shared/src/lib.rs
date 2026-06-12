@@ -24,6 +24,8 @@ impl UserRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: i64,
+    pub site_id: Option<i64>,
+    pub site_name: Option<String>,
     pub username: String,
     pub display_name: String,
     pub role: UserRole,
@@ -52,6 +54,7 @@ pub struct ChangePasswordRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateUserRequest {
+    pub site_id: Option<i64>,
     pub username: String,
     pub display_name: String,
     pub password: String,
@@ -60,6 +63,7 @@ pub struct CreateUserRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateUserRequest {
+    pub site_id: Option<i64>,
     pub display_name: String,
     pub role: UserRole,
     pub enabled: bool,
@@ -96,6 +100,8 @@ pub struct ApiError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Miner {
     pub id: i64,
+    pub site_id: i64,
+    pub site_name: Option<String>,
     pub serial: String,
     pub model: String,
     pub firmware: Option<String>,
@@ -118,6 +124,7 @@ pub struct Miner {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateMiner {
+    pub site_id: Option<i64>,
     pub serial: String,
     pub model: String,
     pub firmware: Option<String>,
@@ -140,6 +147,7 @@ pub struct CreateMiner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateMiner {
     pub id: i64,
+    pub site_id: Option<i64>,
     pub serial: String,
     pub model: String,
     pub firmware: Option<String>,
@@ -170,6 +178,8 @@ pub struct MinerImportResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Part {
+    pub site_id: i64,
+    pub site_name: Option<String>,
     pub sku: String,
     pub name: String,
     pub category: String,
@@ -183,6 +193,7 @@ pub struct Part {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatePart {
+    pub site_id: Option<i64>,
     pub sku: String,
     pub name: String,
     pub category: String,
@@ -207,6 +218,125 @@ pub struct DashboardSummary {
     pub units_by_status: Vec<CountByStatus>,
     pub low_stock_parts: Vec<Part>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditLogEntry {
+    pub id: i64,
+    pub user_id: Option<i64>,
+    pub username: Option<String>,
+    pub action: String,
+    pub target_type: Option<String>,
+    pub target_id: Option<String>,
+    pub target_serial: Option<String>,
+    pub old_values: Option<serde_json::Value>,
+    pub new_values: Option<serde_json::Value>,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditLogQuery {
+    pub user_id: Option<i64>,
+    pub action: Option<String>,
+    pub target_type: Option<String>,
+    pub target_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Webhook {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub secret: Option<String>,
+    pub events: Vec<String>,
+    pub enabled: bool,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateWebhook {
+    pub name: String,
+    pub url: String,
+    pub secret: Option<String>,
+    pub events: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateWebhook {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub secret: Option<String>,
+    pub events: Vec<String>,
+    pub enabled: bool,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookDelivery {
+    pub id: i64,
+    pub webhook_id: i64,
+    pub event: String,
+    pub payload: serde_json::Value,
+    pub response_status: Option<i32>,
+    pub response_body: Option<String>,
+    pub success: bool,
+    pub error: Option<String>,
+    pub attempts: i32,
+    pub created_at: String,
+    pub delivered_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Site {
+    pub id: i64,
+    pub name: String,
+    pub code: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSite {
+    pub name: String,
+    pub code: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSite {
+    pub id: i64,
+    pub name: String,
+    pub code: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SiteQuery {
+    pub site_id: Option<i64>,
+}
+
+pub const WEBHOOK_EVENTS: &[&str] = &[
+    "miner.created",
+    "miner.updated",
+    "miner.deleted",
+    "part.created",
+    "part.updated",
+    "part.deleted",
+    "user.created",
+    "user.updated",
+    "user.deleted",
+];
 
 pub fn normalize_username(username: &str) -> String {
     username.trim().to_lowercase()

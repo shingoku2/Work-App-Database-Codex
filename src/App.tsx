@@ -4,6 +4,7 @@ import { DashboardView } from "@/features/dashboard/DashboardView";
 import { InventoryView } from "@/features/inventory/InventoryView";
 import { MinersView } from "@/features/miners/MinersView";
 import { AccountsView } from "@/features/accounts/AccountsView";
+import { AuditLogView } from "@/features/audit/AuditLogView";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
 import { SettingsView } from "@/features/settings/SettingsView";
 import type { User } from "@/types/db";
@@ -25,6 +26,7 @@ function AuthenticatedApp({ user, serverUrl }: { user: User; serverUrl: string }
       {view === "units" && <MinersView canImport={user.role === "admin"} />}
       {view === "inventory" && <InventoryView />}
       {view === "accounts" && user.role === "admin" && <AccountsView />}
+      {view === "audit" && user.role === "admin" && <AuditLogView />}
       {view === "settings" && <SettingsView user={user} serverUrl={serverUrl} />}
     </AppShell>
   );
