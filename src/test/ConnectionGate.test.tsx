@@ -115,7 +115,10 @@ describe("ConnectionGate", () => {
     expect(await screen.findByRole("heading", { name: "Set up SSH tunnel" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Connect to Fleet Server" })).not.toBeInTheDocument();
 
-    // Enter label first (required before generating key)
+    // Enter the server URL and label first (both required before generating key)
+    const serverUrlInput = screen.getByLabelText("Server URL");
+    await actor.clear(serverUrlInput);
+    await actor.type(serverUrlInput, "https://fleet.example:8443");
     await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
 
     // Generate key is now enabled
@@ -128,7 +131,7 @@ describe("ConnectionGate", () => {
 
     // Wait for mutation to be called
     await waitFor(() =>
-      expect(mockedSubmitTunnelKeyRequest).toHaveBeenCalledWith({
+      expect(mockedSubmitTunnelKeyRequest).toHaveBeenCalledWith("https://fleet.example:8443", {
         label: "alice-workstation",
         public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       }),

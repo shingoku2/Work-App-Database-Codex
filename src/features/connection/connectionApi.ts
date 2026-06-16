@@ -86,8 +86,11 @@ export function resetUserPassword(id: number, password: string): Promise<void> {
 // Tunnel key requests
 // ---------------------------------------------------------------------------
 
-export function submitTunnelKeyRequest(input: SubmitTunnelKeyRequest): Promise<TunnelKeyRequest> {
-  return command<TunnelKeyRequest>("submit_tunnel_key_request", { input });
+export function submitTunnelKeyRequest(
+  serverUrl: string,
+  input: SubmitTunnelKeyRequest,
+): Promise<TunnelKeyRequest> {
+  return command<TunnelKeyRequest>("submit_tunnel_key_request", { serverUrl, input });
 }
 
 export function listTunnelKeyRequests(): Promise<TunnelKeyRequest[]> {

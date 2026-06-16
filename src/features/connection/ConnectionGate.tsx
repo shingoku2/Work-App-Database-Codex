@@ -81,6 +81,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
   const [remoteHost, setRemoteHost] = useState("127.0.0.1");
   const [remotePort, setRemotePort] = useState("8443");
   const [label, setLabel] = useState("");
+  const [serverUrl, setServerUrl] = useState(initialServerUrl);
   const [key, setKey] = useState<TunnelKeyInfo | null>(null);
   const [pendingRequest, setPendingRequest] = useState<TunnelKeyRequest | null>(null);
 
@@ -94,7 +95,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
 
   const submitKey = useMutation({
     mutationFn: () =>
-      submitTunnelKeyRequest({
+      submitTunnelKeyRequest(serverUrl.trim(), {
         label: label.trim(),
         public_key: key!.public_key,
       }),
@@ -142,13 +143,20 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
           <>
             <input
               className={`${fieldClass} w-full`}
+              aria-label="Server URL"
+              placeholder="https://fleet-server.example:8443"
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+            />
+            <input
+              className={`${fieldClass} w-full`}
               placeholder="Your name or machine tag, e.g. alice-workstation"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
             />
             <button
               className={secondaryButtonClass}
-              disabled={generateKey.isPending || !label.trim()}
+              disabled={generateKey.isPending || !label.trim() || !serverUrl.trim()}
               onClick={() => generateKey.mutate()}
             >
               Generate This Computer's SSH Key
@@ -166,7 +174,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             {key && !pendingRequest && (
               <button
                 className={primaryButtonClass}
-                disabled={submitKey.isPending || !label.trim()}
+                disabled={submitKey.isPending || !label.trim() || !serverUrl.trim()}
                 onClick={() => submitKey.mutate()}
               >
                 Submit Key for Admin Approval

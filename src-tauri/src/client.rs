@@ -74,16 +74,26 @@ impl ClientState {
 
     pub async fn probe(url: &str) -> Result<PairingInfo, String> {
         let base_url = normalize_url(url)?;
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .https_only(true)
-            .build()
-            .map_err(|error| error.to_string())?;
-        let response = client
-            .get(join_url(&base_url, "/pairing")?)
-            .send()
+        let response = one_shot_request::<()>(Method::GET, &base_url, "/pairing", None)
             .await
             .map_err(|error| format!("Could not reach server: {error}"))?;
+        parse_response(response).await
+    }
+
+    /// POST without a bearer token to an explicit URL, before the client is
+    /// paired. Used for unauthenticated pre-pair endpoints (currently
+    /// `POST /api/v1/tunnel-key-requests`). The TLS certificate is NOT pinned
+    /// here — the user is expected to compare the server fingerprint when
+    /// they pair, which is when the cert gets pinned.
+    pub async fn post_no_auth_to_url<B: Serialize + ?Sized, T: DeserializeOwned>(
+        url: &str,
+        path: &str,
+        body: &B,
+    ) -> Result<T, String> {
+        let base_url = normalize_url(url)?;
+        let response = one_shot_request(Method::POST, &base_url, path, Some(body))
+            .await
+            .map_err(network_error)?;
         parse_response(response).await
     }
 
@@ -263,24 +273,6 @@ impl ClientState {
         body: &B,
     ) -> Result<T, String> {
         self.request(Method::POST, path, Some(body)).await
-    }
-
-    /// POST without a bearer token — for unauthenticated endpoints on the
-    /// already-paired server (e.g. `/api/v1/tunnel-key-requests`).
-    pub async fn post_no_auth<B: Serialize + ?Sized, T: DeserializeOwned>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<T, String> {
-        let config = self.require_config().await?;
-        let client = build_client(&config)?;
-        let response = client
-            .post(join_url(&config.url, path)?)
-            .json(body)
-            .send()
-            .await
-            .map_err(network_error)?;
-        parse_response(response).await
     }
 
     pub async fn put<B: Serialize + ?Sized, T: DeserializeOwned>(
@@ -549,6 +541,30 @@ fn credential_entry() -> Result<Entry, String> {
 
 fn network_error(error: reqwest::Error) -> String {
     format!("Server connection failed: {error}")
+}
+
+/// Build a one-shot reqwest client that does not pin the server certificate,
+/// and perform a single request to `base_url` + `path`. Used for endpoints
+/// that must be reachable before the client has ever paired (e.g. `/pairing`,
+/// `POST /api/v1/tunnel-key-requests`). Certificate trust is the user's
+/// responsibility at this stage — pairing and fingerprint comparison are what
+/// turn the URL into a pinned identity.
+async fn one_shot_request<B: Serialize + ?Sized>(
+    method: Method,
+    base_url: &str,
+    path: &str,
+    body: Option<&B>,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .https_only(true)
+        .build()
+        .expect("static one-shot HTTPS client must build");
+    let mut request = client.request(method, join_url(base_url, path).expect("url is canonical"));
+    if let Some(body) = body {
+        request = request.json(body);
+    }
+    request.send().await
 }
 
 async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, String> {

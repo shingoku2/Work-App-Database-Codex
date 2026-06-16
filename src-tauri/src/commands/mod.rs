@@ -734,10 +734,10 @@ mod tests {
 
 #[tauri::command]
 pub async fn submit_tunnel_key_request(
-    state: State<'_, ClientState>,
+    server_url: String,
     input: SubmitTunnelKeyRequest,
 ) -> Result<TunnelKeyRequest, String> {
-    state.post_no_auth("/api/v1/tunnel-key-requests", &input).await
+    ClientState::post_no_auth_to_url(&server_url, "/api/v1/tunnel-key-requests", &input).await
 }
 
 #[tauri::command]
