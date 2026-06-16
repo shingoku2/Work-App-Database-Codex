@@ -9,6 +9,7 @@ import {
   getTunnelStatus,
   login,
   saveTunnelConfig,
+  submitTunnelKeyRequest,
 } from "@/features/connection/connectionApi";
 
 vi.mock("@/features/connection/connectionApi", () => ({
@@ -21,6 +22,7 @@ vi.mock("@/features/connection/connectionApi", () => ({
   saveTunnelConfig: vi.fn(),
   startTunnelConnection: vi.fn(),
   unpairServer: vi.fn(),
+  submitTunnelKeyRequest: vi.fn(),
 }));
 
 const mockedState = vi.mocked(getConnectionState);
@@ -28,12 +30,15 @@ const mockedTunnel = vi.mocked(getTunnelStatus);
 const mockedGenerateTunnelKey = vi.mocked(generateTunnelKey);
 const mockedSaveTunnelConfig = vi.mocked(saveTunnelConfig);
 const mockedLogin = vi.mocked(login);
+const mockedSubmitTunnelKeyRequest = vi.mocked(submitTunnelKeyRequest);
 
 beforeEach(() => {
   mockedState.mockReset();
   mockedTunnel.mockReset();
   mockedGenerateTunnelKey.mockReset();
   mockedSaveTunnelConfig.mockReset();
+  mockedSubmitTunnelKeyRequest.mockReset();
+  mockedLogin.mockReset();
   mockedTunnel.mockResolvedValue({
     supported: true,
     configured: true,
@@ -45,7 +50,6 @@ beforeEach(() => {
     config_path: "C:/Users/example/AppData/Local/AntminerFleetManager/fleet-tunnel.local.json",
     error: null,
   });
-  mockedLogin.mockReset();
 });
 
 function renderGate() {
@@ -85,6 +89,14 @@ describe("ConnectionGate", () => {
       public_key_file: "C:/Users/example/.ssh/antminer_fleet_tunnel.pub",
       public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
     });
+    mockedSubmitTunnelKeyRequest.mockResolvedValue({
+      id: 42,
+      label: "alice-workstation",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+      status: "pending",
+      note: null,
+      created_at: "2026-06-16T10:00:00Z",
+    });
     mockedSaveTunnelConfig.mockResolvedValue({
       supported: true,
       configured: true,
@@ -103,21 +115,22 @@ describe("ConnectionGate", () => {
     expect(await screen.findByRole("heading", { name: "Set up SSH tunnel" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Connect to Fleet Server" })).not.toBeInTheDocument();
 
+    // Enter label first (required before generating key)
+    await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
+
+    // Generate key is now enabled
     await actor.click(screen.getByRole("button", { name: "Generate This Computer's SSH Key" }));
     expect(await screen.findByDisplayValue("ssh-ed25519 AAAATEST antminer-fleet-tunnel")).toBeInTheDocument();
     expect(screen.getByDisplayValue("C:/Users/example/.ssh/antminer_fleet_tunnel")).toBeInTheDocument();
 
-    await actor.type(screen.getByPlaceholderText("SSH destination, e.g. fleet-user@ssh-host.example"), "alice@jump.example");
-    await actor.click(screen.getByRole("button", { name: "Save and Start Tunnel" }));
+    // Submit key for admin approval
+    await actor.click(screen.getByRole("button", { name: "Submit Key for Admin Approval" }));
 
+    // Wait for mutation to be called
     await waitFor(() =>
-      expect(mockedSaveTunnelConfig).toHaveBeenCalledWith({
-        ssh_destination: "alice@jump.example",
-        ssh_port: 22,
-        identity_file: "C:/Users/example/.ssh/antminer_fleet_tunnel",
-        local_port: 8443,
-        remote_host: "127.0.0.1",
-        remote_port: 8443,
+      expect(mockedSubmitTunnelKeyRequest).toHaveBeenCalledWith({
+        label: "alice-workstation",
+        public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       }),
     );
   });

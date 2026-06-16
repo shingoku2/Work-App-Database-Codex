@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useEffect } from "react";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Panel";
 import { initialServerUrl } from "@/config/server";
-import type { PairingInfo, TunnelKeyInfo, TunnelStatus, User } from "@/types/db";
+import type { PairingInfo, TunnelKeyInfo, TunnelKeyRequest, TunnelStatus, User } from "@/types/db";
 import {
   generateTunnelKey,
   getConnectionState,
@@ -12,6 +12,7 @@ import {
   probeServer,
   saveTunnelConfig,
   startTunnelConnection,
+  submitTunnelKeyRequest,
   unpairServer,
 } from "./connectionApi";
 
@@ -79,7 +80,10 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
   const [localPort, setLocalPort] = useState("8443");
   const [remoteHost, setRemoteHost] = useState("127.0.0.1");
   const [remotePort, setRemotePort] = useState("8443");
+  const [label, setLabel] = useState("");
   const [key, setKey] = useState<TunnelKeyInfo | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<TunnelKeyRequest | null>(null);
+
   const generateKey = useMutation({
     mutationFn: generateTunnelKey,
     onSuccess: (created) => {
@@ -87,6 +91,20 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
       setIdentityFile(created.identity_file);
     },
   });
+
+  const submitKey = useMutation({
+    mutationFn: () =>
+      submitTunnelKeyRequest({
+        label: label.trim(),
+        public_key: key!.public_key,
+      }),
+    onSuccess: (req) => setPendingRequest(req),
+    onError: (error) => {
+      // Error is handled by the mutation's error state
+      console.error("Failed to submit tunnel key:", error);
+    },
+  });
+
   const startExisting = useMutation({ mutationFn: startTunnelConnection, onSuccess: onComplete });
   const save = useMutation({
     mutationFn: () =>
@@ -105,8 +123,8 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
     <FullPageCard title="Set up SSH tunnel">
       <div className="space-y-4 text-sm text-slate-300">
         <p>
-          Create this computer's own SSH tunnel. Do not use Eddie's SSH login. Generate a local key, have the
-          server administrator add the public key to the tunnel account, then save and start the tunnel.
+          Create this computer's own SSH tunnel. Do not use Eddie's SSH login. Enter a label (your name
+          or machine tag), generate a local key, and submit it for admin approval.
         </p>
         {status.configured && status.error && <ErrorText error={status.error} />}
         {status.configured && (
@@ -118,39 +136,111 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             {startExisting.error && <ErrorText error={startExisting.error} />}
           </div>
         )}
-        <button className={secondaryButtonClass} disabled={generateKey.isPending} onClick={() => generateKey.mutate()}>
-          Generate This Computer's SSH Key
-        </button>
-        {generateKey.error && <ErrorText error={generateKey.error} />}
-        {key && (
-          <div className="rounded-md border border-white/10 bg-black/20 p-4">
-            <div className="mb-2 text-xs uppercase text-slate-500">Send this public key to the server administrator</div>
-            <textarea className={`${fieldClass} h-28 w-full font-mono text-xs`} readOnly value={key.public_key} />
-            <div className="mt-2 text-xs text-slate-400">Private key stays on this computer: {key.identity_file}</div>
-          </div>
+        {pendingRequest ? (
+          <WaitingForApproval request={pendingRequest} onCancel={() => setPendingRequest(null)} />
+        ) : (
+          <>
+            <input
+              className={`${fieldClass} w-full`}
+              placeholder="Your name or machine tag, e.g. alice-workstation"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+            <button
+              className={secondaryButtonClass}
+              disabled={generateKey.isPending || !label.trim()}
+              onClick={() => generateKey.mutate()}
+            >
+              Generate This Computer's SSH Key
+            </button>
+            {generateKey.error && <ErrorText error={generateKey.error} />}
+            {key && !pendingRequest && (
+              <div className="rounded-md border border-white/10 bg-black/20 p-4">
+                <div className="mb-2 text-xs uppercase text-slate-500">
+                  Send this public key to the server administrator
+                </div>
+                <textarea className={`${fieldClass} h-28 w-full font-mono text-xs`} readOnly value={key.public_key} />
+                <div className="mt-2 text-xs text-slate-400">Private key stays on this computer: {key.identity_file}</div>
+              </div>
+            )}
+            {key && !pendingRequest && (
+              <button
+                className={primaryButtonClass}
+                disabled={submitKey.isPending || !label.trim()}
+                onClick={() => submitKey.mutate()}
+              >
+                Submit Key for Admin Approval
+              </button>
+            )}
+            {submitKey.error && <ErrorText error={submitKey.error} />}
+            <hr className="border-white/10" />
+            <p className="text-xs text-slate-500">Or configure manually if the admin has already authorized your key:</p>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                save.mutate();
+              }}
+            >
+              <input className={`${fieldClass} w-full`} placeholder="SSH destination, e.g. fleet-user@ssh-host.example" value={sshDestination} onChange={(event) => setSshDestination(event.target.value)} />
+              <input className={`${fieldClass} w-full`} placeholder="Private key path" value={identityFile} onChange={(event) => setIdentityFile(event.target.value)} />
+              <div className="grid grid-cols-3 gap-2">
+                <input className={`${fieldClass} w-full`} aria-label="SSH port" value={sshPort} onChange={(event) => setSshPort(event.target.value)} />
+                <input className={`${fieldClass} w-full`} aria-label="Local port" value={localPort} onChange={(event) => setLocalPort(event.target.value)} />
+                <input className={`${fieldClass} w-full`} aria-label="Remote port" value={remotePort} onChange={(event) => setRemotePort(event.target.value)} />
+              </div>
+              <input className={`${fieldClass} w-full`} placeholder="Remote host on SSH server" value={remoteHost} onChange={(event) => setRemoteHost(event.target.value)} />
+              <button className={primaryButtonClass} disabled={save.isPending || !sshDestination.trim()}>
+                Save and Start Tunnel
+              </button>
+              {save.error && <ErrorText error={save.error} />}
+            </form>
+          </>
         )}
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate();
-          }}
-        >
-          <input className={`${fieldClass} w-full`} placeholder="SSH destination, e.g. fleet-user@ssh-host.example" value={sshDestination} onChange={(event) => setSshDestination(event.target.value)} />
-          <input className={`${fieldClass} w-full`} placeholder="Private key path" value={identityFile} onChange={(event) => setIdentityFile(event.target.value)} />
-          <div className="grid grid-cols-3 gap-2">
-            <input className={`${fieldClass} w-full`} aria-label="SSH port" value={sshPort} onChange={(event) => setSshPort(event.target.value)} />
-            <input className={`${fieldClass} w-full`} aria-label="Local port" value={localPort} onChange={(event) => setLocalPort(event.target.value)} />
-            <input className={`${fieldClass} w-full`} aria-label="Remote port" value={remotePort} onChange={(event) => setRemotePort(event.target.value)} />
-          </div>
-          <input className={`${fieldClass} w-full`} placeholder="Remote host on SSH server" value={remoteHost} onChange={(event) => setRemoteHost(event.target.value)} />
-          <button className={primaryButtonClass} disabled={save.isPending || !sshDestination.trim()}>
-            Save and Start Tunnel
-          </button>
-          {save.error && <ErrorText error={save.error} />}
-        </form>
       </div>
     </FullPageCard>
+  );
+}
+
+function WaitingForApproval({
+  request,
+  onCancel,
+}: {
+  request: TunnelKeyRequest;
+  onCancel: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const id = setInterval(
+      () => queryClient.invalidateQueries({ queryKey: ["tunnel"] }),
+      10_000,
+    );
+    return () => clearInterval(id);
+  }, [queryClient]);
+
+  return (
+    <div className="space-y-4 text-sm text-slate-300">
+      <p>
+        Your SSH key has been submitted (request #{request.id}, label:{" "}
+        <span className="font-mono text-slate-100">{request.label}</span>).
+        Ask your server administrator to approve it in the Fleet Manager admin
+        panel. This screen checks for approval every 10 seconds.
+      </p>
+      <div className="rounded-md border border-white/10 bg-black/20 p-4">
+        <div className="mb-2 text-xs uppercase text-slate-500">
+          Public key (for manual fallback)
+        </div>
+        <textarea
+          className="h-20 w-full resize-none rounded border border-white/10 bg-black/30 p-2 font-mono text-xs text-slate-200"
+          readOnly
+          value={request.public_key}
+        />
+      </div>
+      <button className="text-xs text-slate-400 underline" onClick={onCancel}>
+        Start over
+      </button>
+    </div>
   );
 }
 

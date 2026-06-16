@@ -16,6 +16,7 @@ import {
   listWebhooks,
   updateWebhook,
 } from "./webhookApi";
+import { TunnelKeyRequestsView } from "./TunnelKeyRequestsView";
 
 const ALL_EVENTS = [
   "miner.created",
@@ -122,6 +123,7 @@ export function SettingsView({ user, serverUrl }: { user: User; serverUrl: strin
           </div>
         </Panel>
       )}
+      {user.role === "admin" && <TunnelKeyRequestsView />}
       <button
         className={secondaryButtonClass}
         disabled={logoutMutation.isPending}
