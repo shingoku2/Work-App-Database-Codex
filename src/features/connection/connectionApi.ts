@@ -1,5 +1,5 @@
 import { command } from "@/lib/tauri";
-import type { ConnectionState, PairingInfo, TunnelConfigInput, TunnelKeyInfo, TunnelStatus, User, UserRole } from "@/types/db";
+import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelConfigInput, TunnelKeyInfo, TunnelKeyRequest, TunnelStatus, User, UserRole } from "@/types/db";
 
 export function getConnectionState(): Promise<ConnectionState> {
   return command<ConnectionState>("get_connection_state");
@@ -80,4 +80,27 @@ export function updateUser(input: User): Promise<User> {
 
 export function resetUserPassword(id: number, password: string): Promise<void> {
   return command<void>("reset_user_password", { id, input: { password } });
+}
+
+// ---------------------------------------------------------------------------
+// Tunnel key requests
+// ---------------------------------------------------------------------------
+
+export function submitTunnelKeyRequest(input: SubmitTunnelKeyRequest): Promise<TunnelKeyRequest> {
+  return command<TunnelKeyRequest>("submit_tunnel_key_request", { input });
+}
+
+export function listTunnelKeyRequests(): Promise<TunnelKeyRequest[]> {
+  return command<TunnelKeyRequest[]>("list_tunnel_key_requests");
+}
+
+export function approveTunnelKeyRequest(
+  id: number,
+  input: ApproveTunnelKeyRequest,
+): Promise<TunnelKeyRequest> {
+  return command<TunnelKeyRequest>("approve_tunnel_key_request", { id, input });
+}
+
+export function rejectTunnelKeyRequest(id: number): Promise<void> {
+  return command<void>("reject_tunnel_key_request", { id });
 }
