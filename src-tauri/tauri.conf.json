@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "icon": ["icons/128x128.png", "icons/icon.ico"],
     "resources": ["../scripts/fleet-tunnel.ps1"],
     "windows": {
       "nsis": {

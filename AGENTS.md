@@ -17,17 +17,29 @@ General rules for all Codex work in this repository:
 - Preserve public APIs unless a task explicitly allows breaking changes.
 - When writing reports, place them in `.codex/reports/`.
 
+## Project Scope
+
+Antminer Fleet Manager is a self-hosted client/server asset-management
+application for ASIC miner fleets. Keep work focused on miners, spreadsheet
+import, parts inventory, dashboard reporting, sites, audit logs, webhooks,
+accounts, and server operations. Do not reintroduce ticketing or technician
+workflows.
+
 ## Architecture Boundaries
 
 - The production application is client/server. PostgreSQL is the only
   production database and is owned exclusively by `antminer-fleet-server`.
+- Server-owned behavior includes miner, part, site, audit-log, webhook,
+  dashboard, account, auth/session, import, migration, and TLS handling.
 - The React frontend runs inside Tauri. Browser code must call the established
   Tauri command wrapper; do not add direct browser access to the server or
   database.
-- The Tauri Rust layer performs HTTPS requests with Rustls and stores the
-  bearer session token in the operating-system credential manager.
+- The Tauri Rust layer proxies to `/api/v1`, performs HTTPS requests with
+  Rustls, and stores the bearer session token in the operating-system
+  credential manager.
 - The client is online-required. Do not add a local production database,
-  offline write queue, or automatic upload of legacy `fleet.db` data.
+  offline write queue, or automatic upload of legacy `fleet.db` data. Do not
+  reintroduce production local SQLite ownership in Tauri.
 - Shared Rust API/domain contracts live in `crates/fleet-shared`; matching
   TypeScript contracts live in `src/types/db.ts`. Keep field names and enum
   values synchronized.
@@ -69,11 +81,12 @@ General rules for all Codex work in this repository:
 
 ## Validation by Area
 
-- Frontend-only: `npm run build` and `npm test`.
+- Frontend-only: `npm ci` if dependencies are missing or stale, then
+  `npm run build` and `npm test`.
 - Rust/server-only: start with `cargo check -p antminer-fleet-server --locked`;
   add targeted server tests when behavior changes.
 - Shared or cross-component Rust changes: `cargo check --workspace --locked`
-  and the relevant workspace tests.
+  and the relevant workspace tests, usually `cargo test --workspace --locked`.
 - Packaging/tunnel changes: run `sh -n` on changed shell scripts,
   `systemd-analyze verify` on changed units when available,
   `sh server/scripts/build-deb.sh`, and inspect the resulting package.

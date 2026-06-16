@@ -28,7 +28,6 @@ pub fn run() {
             commands::unpair_server,
             commands::login,
             commands::logout,
-            commands::current_user,
             commands::change_password,
             commands::list_users,
             commands::create_user,

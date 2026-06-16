@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use tauri::State;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const DEFAULT_TUNNEL_PORT: u16 = 8443;
 
@@ -180,11 +180,6 @@ pub async fn login(
 #[tauri::command]
 pub async fn logout(state: State<'_, ClientState>) -> Result<(), String> {
     state.logout().await
-}
-
-#[tauri::command]
-pub async fn current_user(state: State<'_, ClientState>) -> Result<User, String> {
-    state.get("/api/v1/auth/me").await
 }
 
 #[tauri::command]
