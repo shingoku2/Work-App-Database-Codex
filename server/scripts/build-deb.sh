@@ -17,7 +17,7 @@ install -m 0644 "$ROOT/server/packaging/antminer-fleet-tunnel.service" "$STAGE/l
 install -m 0644 "$ROOT/server/config/server.example.toml" "$STAGE/usr/share/doc/antminer-fleet-server/server.example.toml"
 install -m 0644 "$ROOT/server/config/tunnel.example.conf" "$STAGE/usr/share/doc/antminer-fleet-server/tunnel.example.conf"
 install -m 0644 "$ROOT/server/config/sshd-client-tunnel.example.conf" "$STAGE/usr/share/doc/antminer-fleet-server/sshd-client-tunnel.example.conf"
-
+install -m 0644 "$ROOT/server/packaging/debian/control" "$STAGE/DEBIAN/control"
 install -m 0755 "$ROOT/server/packaging/debian/postinst" "$STAGE/DEBIAN/postinst"
 install -m 0755 "$ROOT/server/packaging/debian/prerm" "$STAGE/DEBIAN/prerm"
 dpkg-deb --build --root-owner-group "$STAGE" "$OUTPUT"

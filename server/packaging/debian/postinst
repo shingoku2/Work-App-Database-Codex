@@ -8,8 +8,21 @@ if ! getent passwd antminer-fleet >/dev/null; then
   adduser --system --ingroup antminer-fleet --home /var/lib/antminer-fleet --no-create-home antminer-fleet
 fi
 
+if ! getent group antminer-fleet-client-tunnel >/dev/null; then
+  addgroup --system antminer-fleet-client-tunnel
+fi
+if ! getent passwd antminer-fleet-client-tunnel >/dev/null; then
+  adduser --system --ingroup antminer-fleet-client-tunnel --home /var/lib/antminer-fleet-client-tunnel --no-create-home antminer-fleet-client-tunnel
+fi
+
 install -d -m 0750 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet
 install -d -m 0700 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet/.ssh
+install -d -m 0750 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /var/lib/antminer-fleet-client-tunnel
+install -d -m 0750 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /etc/antminer-fleet/client-tunnel
+if [ ! -f /etc/antminer-fleet/client-tunnel/authorized_keys ]; then
+  install -m 0640 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /dev/null /etc/antminer-fleet/client-tunnel/authorized_keys
+fi
+
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet/tls
 
