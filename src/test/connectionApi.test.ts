@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   changePassword,
   login,
@@ -30,6 +30,10 @@ const user: User = {
 };
 
 describe("connection API", () => {
+  beforeEach(() => {
+    mockedCommand.mockReset();
+  });
+
   it("probes and pairs using Tauri camelCase argument names", async () => {
     mockedCommand.mockResolvedValueOnce(pairing).mockResolvedValueOnce(undefined);
     await probeServer("https://server:8443");
