@@ -87,16 +87,18 @@ database.
 
 ### Windows SSH tunnel helper
 
-When the server is reachable only through SSH, copy
-`scripts/fleet-tunnel.example.json` to
-`scripts/fleet-tunnel.local.json` and set `ssh_destination` to
-`USER@REMOTE_HOST` or an SSH config alias. SSH key or agent authentication must
-already work without a password prompt.
+When the server is reachable only through SSH, each Windows install creates its
+own tunnel connection during first setup. The app can generate a dedicated
+client key at `%USERPROFILE%\.ssh\antminer_fleet_tunnel`, shows only the public
+key for server-side authorization, then writes the user-specific tunnel config
+to `%LOCALAPPDATA%\AntminerFleetManager\fleet-tunnel.local.json`. Do not reuse a
+developer SSH login, do not bundle private keys, and do not commit
+machine-local tunnel config.
 
-For a dedicated key, set `identity_file` to a local private-key path such as
-`%USERPROFILE%\.ssh\antminer_fleet_tunnel`. Only the matching public key is
-installed on the SSH host; never copy the private key into the repository or
-server.
+SSH key or agent authentication must work without a password prompt. The Windows
+installer checks for OpenSSH Client and installs the Windows optional feature
+when `ssh.exe` is missing, then the desktop app starts the user's saved tunnel
+helper on launch before loading the saved server profile.
 
 Users can then double-click `scripts/Start Fleet Tunnel.cmd`, or run:
 

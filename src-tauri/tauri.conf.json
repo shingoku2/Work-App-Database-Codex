@@ -30,7 +30,8 @@
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
-        "installMode": "currentUser"
+        "installMode": "perMachine",
+        "installerHooks": "../scripts/install-openssh-client.nsh"
       }
     }
   }

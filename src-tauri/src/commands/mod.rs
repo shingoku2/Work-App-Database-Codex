@@ -5,13 +5,147 @@ use fleet_shared::{
     PairingInfo, Part, ResetPasswordRequest, Site, UpdateMiner, UpdateSite, UpdateUserRequest,
     UpdateWebhook, User, Webhook, WebhookDelivery,
 };
+use serde::{Deserialize, Serialize};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
 use tauri::State;
+use tauri::{AppHandle, Manager};
+
+const DEFAULT_TUNNEL_PORT: u16 = 8443;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunnelConfigInput {
+    pub ssh_destination: String,
+    pub ssh_port: Option<u16>,
+    pub identity_file: Option<String>,
+    pub local_port: Option<u16>,
+    pub remote_host: Option<String>,
+    pub remote_port: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TunnelStatus {
+    pub supported: bool,
+    pub configured: bool,
+    pub running: bool,
+    pub local_port_open: bool,
+    pub local_url: String,
+    pub remote_target: String,
+    pub process_id: Option<u32>,
+    pub config_path: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TunnelKeyInfo {
+    pub identity_file: String,
+    pub public_key_file: String,
+    pub public_key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TunnelConfigFile {
+    ssh_destination: String,
+    ssh_port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identity_file: Option<String>,
+    local_port: u16,
+    remote_host: String,
+    remote_port: u16,
+}
 
 #[tauri::command]
 pub async fn get_connection_state(
     state: State<'_, ClientState>,
 ) -> Result<ConnectionState, String> {
     state.connection_state().await
+}
+
+#[tauri::command]
+pub fn get_tunnel_status(app: AppHandle) -> Result<TunnelStatus, String> {
+    tunnel_status(&app)
+}
+
+#[tauri::command]
+pub fn save_tunnel_config(
+    app: AppHandle,
+    input: TunnelConfigInput,
+) -> Result<TunnelStatus, String> {
+    let config = normalize_tunnel_config(input)?;
+    let path = tunnel_config_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(&config).map_err(|error| error.to_string())?;
+    std::fs::write(&path, format!("{json}\n")).map_err(|error| error.to_string())?;
+    start_tunnel_with_config(&app, &path)?;
+    tunnel_status(&app)
+}
+
+#[tauri::command]
+pub fn start_tunnel_connection(app: AppHandle) -> Result<TunnelStatus, String> {
+    let config_path = tunnel_config_path()?;
+    if !config_path.exists() {
+        return Ok(unconfigured_tunnel_status(Some(
+            "Tunnel config has not been created yet.".into(),
+        )));
+    }
+    start_tunnel_with_config(&app, &config_path)?;
+    tunnel_status(&app)
+}
+
+#[tauri::command]
+pub fn generate_tunnel_key() -> Result<TunnelKeyInfo, String> {
+    let identity = default_identity_path()?;
+    if let Some(parent) = identity.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    if !identity.exists() {
+        let status = std::process::Command::new("ssh-keygen")
+            .args([
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-C",
+                "antminer-fleet-tunnel",
+                "-f",
+            ])
+            .arg(&identity)
+            .status()
+            .map_err(|error| format!("Could not run ssh-keygen: {error}"))?;
+        if !status.success() {
+            return Err(format!(
+                "ssh-keygen failed with exit code {}",
+                status.code().unwrap_or(-1)
+            ));
+        }
+    }
+
+    let public_key_path = identity.with_extension("pub");
+    if !public_key_path.exists() {
+        let output = std::process::Command::new("ssh-keygen")
+            .args(["-y", "-f"])
+            .arg(&identity)
+            .output()
+            .map_err(|error| format!("Could not export public key: {error}"))?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        }
+        std::fs::write(&public_key_path, &output.stdout).map_err(|error| error.to_string())?;
+    }
+
+    let public_key = std::fs::read_to_string(&public_key_path)
+        .map_err(|error| format!("Could not read public key: {error}"))?
+        .trim()
+        .to_string();
+    Ok(TunnelKeyInfo {
+        identity_file: identity.display().to_string(),
+        public_key_file: public_key_path.display().to_string(),
+        public_key,
+    })
 }
 
 #[tauri::command]
@@ -288,7 +422,9 @@ pub async fn list_webhook_deliveries(
     state: State<'_, ClientState>,
     id: i64,
 ) -> Result<Vec<WebhookDelivery>, String> {
-    state.get(&format!("/api/v1/webhooks/{id}/deliveries")).await
+    state
+        .get(&format!("/api/v1/webhooks/{id}/deliveries"))
+        .await
 }
 
 // ---------------------------------------------------------------------------
@@ -301,18 +437,12 @@ pub async fn list_sites(state: State<'_, ClientState>) -> Result<Vec<Site>, Stri
 }
 
 #[tauri::command]
-pub async fn create_site(
-    state: State<'_, ClientState>,
-    input: CreateSite,
-) -> Result<Site, String> {
+pub async fn create_site(state: State<'_, ClientState>, input: CreateSite) -> Result<Site, String> {
     state.post("/api/v1/sites", &input).await
 }
 
 #[tauri::command]
-pub async fn update_site(
-    state: State<'_, ClientState>,
-    input: UpdateSite,
-) -> Result<Site, String> {
+pub async fn update_site(state: State<'_, ClientState>, input: UpdateSite) -> Result<Site, String> {
     state
         .put(&format!("/api/v1/sites/{}", input.id), &input)
         .await
@@ -329,9 +459,234 @@ pub async fn delete_site(
         .await
 }
 
+#[cfg(target_os = "windows")]
+fn tunnel_config_path() -> Result<PathBuf, String> {
+    let base = dirs::data_local_dir()
+        .ok_or_else(|| "Could not locate LOCALAPPDATA for tunnel configuration".to_string())?;
+    Ok(base
+        .join("AntminerFleetManager")
+        .join("fleet-tunnel.local.json"))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn tunnel_config_path() -> Result<PathBuf, String> {
+    Err("SSH tunnel setup is only supported by the Windows desktop build".into())
+}
+
+#[cfg(target_os = "windows")]
+fn tunnel_script_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let resource_script = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("fleet-tunnel.ps1"))
+        .filter(|path| path.exists());
+    if let Some(path) = resource_script {
+        return Ok(path);
+    }
+
+    let dev_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("scripts")
+        .join("fleet-tunnel.ps1");
+    if dev_script.exists() {
+        return Ok(dev_script);
+    }
+
+    Err("Bundled tunnel script was not found.".into())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn tunnel_script_path(_app: &AppHandle) -> Result<PathBuf, String> {
+    Err("SSH tunnel setup is only supported by the Windows desktop build".into())
+}
+
+fn normalize_tunnel_config(input: TunnelConfigInput) -> Result<TunnelConfigFile, String> {
+    let ssh_destination = input.ssh_destination.trim().to_string();
+    if ssh_destination.is_empty() || ssh_destination.contains("CHANGE_ME") {
+        return Err(
+            "Enter the SSH destination assigned to this user, for example username@10.83.1.120."
+                .into(),
+        );
+    }
+    if ssh_destination.split_whitespace().count() != 1 {
+        return Err(
+            "SSH destination must be one host alias or USER@HOST value, with no spaces.".into(),
+        );
+    }
+
+    let local_port = input.local_port.unwrap_or(DEFAULT_TUNNEL_PORT);
+    let remote_port = input.remote_port.unwrap_or(DEFAULT_TUNNEL_PORT);
+    let ssh_port = input.ssh_port.unwrap_or(22);
+    if local_port == 0 || remote_port == 0 || ssh_port == 0 {
+        return Err("Ports must be between 1 and 65535.".into());
+    }
+
+    let remote_host = input
+        .remote_host
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("127.0.0.1")
+        .to_string();
+    let identity_file = input
+        .identity_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    Ok(TunnelConfigFile {
+        ssh_destination,
+        ssh_port,
+        identity_file,
+        local_port,
+        remote_host,
+        remote_port,
+    })
+}
+
+fn unconfigured_tunnel_status(error: Option<String>) -> TunnelStatus {
+    TunnelStatus {
+        supported: cfg!(target_os = "windows"),
+        configured: false,
+        running: false,
+        local_port_open: false,
+        local_url: format!("https://localhost:{DEFAULT_TUNNEL_PORT}"),
+        remote_target: format!("127.0.0.1:{DEFAULT_TUNNEL_PORT}"),
+        process_id: None,
+        config_path: tunnel_config_path()
+            .ok()
+            .map(|path| path.display().to_string()),
+        error,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn run_tunnel_script(
+    app: &AppHandle,
+    action: &str,
+    config_path: &std::path::Path,
+) -> Result<String, String> {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let script_path = tunnel_script_path(app)?;
+    let output = std::process::Command::new("powershell.exe")
+        .args([
+            "-NonInteractive",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(script_path)
+        .args(["-Action", action, "-Config"])
+        .arg(config_path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|error| format!("Could not run SSH tunnel helper: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        let message = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        Err(message.trim().to_string())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn run_tunnel_script(
+    _app: &AppHandle,
+    _action: &str,
+    _config_path: &std::path::Path,
+) -> Result<String, String> {
+    Err("SSH tunnel setup is only supported by the Windows desktop build".into())
+}
+
+fn start_tunnel_with_config(app: &AppHandle, config_path: &std::path::Path) -> Result<(), String> {
+    run_tunnel_script(app, "Start", config_path).map(|_| ())
+}
+
+fn tunnel_status(app: &AppHandle) -> Result<TunnelStatus, String> {
+    let config_path = match tunnel_config_path() {
+        Ok(path) => path,
+        Err(error) => return Ok(unconfigured_tunnel_status(Some(error))),
+    };
+    if !config_path.exists() {
+        return Ok(unconfigured_tunnel_status(None));
+    }
+
+    let output = match run_tunnel_script(app, "Status", &config_path) {
+        Ok(output) => output,
+        Err(error) => {
+            return Ok(TunnelStatus {
+                supported: cfg!(target_os = "windows"),
+                configured: true,
+                running: false,
+                local_port_open: false,
+                local_url: format!("https://localhost:{DEFAULT_TUNNEL_PORT}"),
+                remote_target: format!("127.0.0.1:{DEFAULT_TUNNEL_PORT}"),
+                process_id: None,
+                config_path: Some(config_path.display().to_string()),
+                error: Some(error),
+            })
+        }
+    };
+
+    Ok(parse_tunnel_status(&output, config_path))
+}
+
+fn parse_tunnel_status(output: &str, config_path: PathBuf) -> TunnelStatus {
+    let field = |name: &str| -> Option<String> {
+        output.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            if key.trim().eq_ignore_ascii_case(name) {
+                Some(value.trim().to_string())
+            } else {
+                None
+            }
+        })
+    };
+    let running = field("Running")
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let local_port_open = field("LocalPortOpen")
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let process_id = field("ProcessId").and_then(|value| value.parse::<u32>().ok());
+    let local_url =
+        field("LocalUrl").unwrap_or_else(|| format!("https://localhost:{DEFAULT_TUNNEL_PORT}"));
+    let remote_target =
+        field("RemoteTarget").unwrap_or_else(|| format!("127.0.0.1:{DEFAULT_TUNNEL_PORT}"));
+
+    TunnelStatus {
+        supported: cfg!(target_os = "windows"),
+        configured: true,
+        running,
+        local_port_open,
+        local_url,
+        remote_target,
+        process_id,
+        config_path: Some(config_path.display().to_string()),
+        error: None,
+    }
+}
+
+fn default_identity_path() -> Result<PathBuf, String> {
+    Ok(dirs::home_dir()
+        .ok_or_else(|| "Could not determine user profile directory.".to_string())?
+        .join(".ssh")
+        .join("antminer_fleet_tunnel"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::part_path;
+    use super::{normalize_tunnel_config, parse_tunnel_status, part_path, TunnelConfigInput};
 
     #[test]
     fn part_paths_encode_reserved_characters() {
@@ -339,5 +694,40 @@ mod tests {
             part_path("PSU / S21?#1"),
             "/api/v1/parts/PSU%20%2F%20S21%3F%231"
         );
+    }
+
+    #[test]
+    fn tunnel_config_defaults_to_user_supplied_destination() {
+        let config = normalize_tunnel_config(TunnelConfigInput {
+            ssh_destination: "alice@10.83.1.120".into(),
+            ssh_port: None,
+            identity_file: Some("".into()),
+            local_port: None,
+            remote_host: None,
+            remote_port: None,
+        })
+        .unwrap();
+
+        assert_eq!(config.ssh_destination, "alice@10.83.1.120");
+        assert_eq!(config.ssh_port, 22);
+        assert_eq!(config.local_port, 8443);
+        assert_eq!(config.remote_host, "127.0.0.1");
+        assert_eq!(config.remote_port, 8443);
+        assert!(config.identity_file.is_none());
+    }
+
+    #[test]
+    fn tunnel_status_parser_reads_powershell_output() {
+        let status = parse_tunnel_status(
+            "Running       : True\nProcessId     : 1234\nLocalUrl      : https://localhost:8443\nLocalPortOpen : True\nRemoteTarget  : 127.0.0.1:8443\n",
+            std::path::PathBuf::from("C:/config.json"),
+        );
+
+        assert!(status.configured);
+        assert!(status.running);
+        assert!(status.local_port_open);
+        assert_eq!(status.process_id, Some(1234));
+        assert_eq!(status.local_url, "https://localhost:8443");
+        assert_eq!(status.remote_target, "127.0.0.1:8443");
     }
 }

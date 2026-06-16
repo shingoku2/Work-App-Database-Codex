@@ -3,16 +3,26 @@ mod commands;
 
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            start_tunnel(app);
             let state = client::ClientState::load(app.handle())?;
             app.manage(state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_connection_state,
+            commands::get_tunnel_status,
+            commands::generate_tunnel_key,
+            commands::save_tunnel_config,
+            commands::start_tunnel_connection,
             commands::probe_server,
             commands::pair_server,
             commands::unpair_server,
@@ -47,4 +57,60 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
+}
+
+#[cfg(target_os = "windows")]
+fn start_tunnel(app: &tauri::App) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let script_path = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("fleet-tunnel.ps1"))
+        .filter(|path| path.exists())
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join("scripts")
+                .join("fleet-tunnel.ps1")
+        });
+    if !script_path.exists() {
+        return;
+    }
+
+    let Some(config_path) = tunnel_config_path() else {
+        return;
+    };
+    if !config_path.exists() {
+        return;
+    }
+
+    let mut command = std::process::Command::new("powershell.exe");
+    command
+        .args([
+            "-NonInteractive",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(&script_path)
+        .args(["-Action", "Start", "-Config"])
+        .arg(&config_path)
+        .creation_flags(CREATE_NO_WINDOW);
+    let _ = command.status();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn start_tunnel(_app: &tauri::App) {}
+
+#[cfg(target_os = "windows")]
+fn tunnel_config_path() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|directory| {
+        directory
+            .join("AntminerFleetManager")
+            .join("fleet-tunnel.local.json")
+    })
 }

@@ -82,6 +82,33 @@ export interface ConnectionState {
   error: string | null;
 }
 
+export interface TunnelStatus {
+  supported: boolean;
+  configured: boolean;
+  running: boolean;
+  local_port_open: boolean;
+  local_url: string;
+  remote_target: string;
+  process_id: number | null;
+  config_path: string | null;
+  error: string | null;
+}
+
+export interface TunnelConfigInput {
+  ssh_destination: string;
+  ssh_port?: number | null;
+  identity_file?: string | null;
+  local_port?: number | null;
+  remote_host?: string | null;
+  remote_port?: number | null;
+}
+
+export interface TunnelKeyInfo {
+  identity_file: string;
+  public_key_file: string;
+  public_key: string;
+}
+
 // ---------------------------------------------------------------------------
 // Audit log
 // ---------------------------------------------------------------------------

@@ -3,21 +3,38 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
-import { getConnectionState, login } from "@/features/connection/connectionApi";
+import { getConnectionState, getTunnelStatus, login } from "@/features/connection/connectionApi";
 
 vi.mock("@/features/connection/connectionApi", () => ({
   getConnectionState: vi.fn(),
+  getTunnelStatus: vi.fn(),
+  generateTunnelKey: vi.fn(),
   login: vi.fn(),
   pairServer: vi.fn(),
   probeServer: vi.fn(),
+  saveTunnelConfig: vi.fn(),
+  startTunnelConnection: vi.fn(),
   unpairServer: vi.fn(),
 }));
 
 const mockedState = vi.mocked(getConnectionState);
+const mockedTunnel = vi.mocked(getTunnelStatus);
 const mockedLogin = vi.mocked(login);
 
 beforeEach(() => {
   mockedState.mockReset();
+  mockedTunnel.mockReset();
+  mockedTunnel.mockResolvedValue({
+    supported: true,
+    configured: true,
+    running: true,
+    local_port_open: true,
+    local_url: "https://localhost:8443",
+    remote_target: "127.0.0.1:8443",
+    process_id: 1234,
+    config_path: "C:/Users/example/AppData/Local/AntminerFleetManager/fleet-tunnel.local.json",
+    error: null,
+  });
   mockedLogin.mockReset();
 });
 

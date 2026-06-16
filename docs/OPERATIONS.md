@@ -59,17 +59,26 @@ delete server data.
 
 ### Windows SSH tunnel helper
 
-For deployments that still require an SSH jump host, configure
-`scripts/fleet-tunnel.local.json` from the provided example. The helper uses
-Windows OpenSSH with `BatchMode`, `ExitOnForwardFailure`, and keepalives, then
-runs the tunnel without a visible terminal window. Key-based or SSH-agent
-authentication is required; the helper never accepts or stores an SSH
-password.
+For deployments that still require an SSH jump host, the Windows app now walks
+each user through first-run tunnel setup before pairing. The setup can generate
+a dedicated client key at `%USERPROFILE%\.ssh\antminer_fleet_tunnel`, displays
+only the public key for authorization on the SSH host, and stores the user's
+tunnel settings at `%LOCALAPPDATA%\AntminerFleetManager\fleet-tunnel.local.json`.
+Do not use a developer SSH login for deployed clients, do not bundle private
+keys, and do not commit machine-local tunnel config.
 
-Set `identity_file` when using a dedicated Fleet tunnel key. Install only its
-public key in the SSH account's `authorized_keys`, preferably restricted to
-local forwarding for the Fleet endpoint. Keep the private key on the client
-with user-only permissions.
+The Windows NSIS installer checks for `ssh.exe` and installs the Windows
+OpenSSH Client optional feature when it is missing; this requires an elevated
+install and Windows access to the optional-feature payload. The desktop app
+starts only the user's saved LOCALAPPDATA tunnel config during launch before
+loading the saved server profile. The helper uses Windows OpenSSH with
+`BatchMode`, `ExitOnForwardFailure`, and keepalives, then runs the tunnel
+without a visible terminal window. Key-based or SSH-agent authentication is
+required; the helper never accepts or stores an SSH password.
+
+Install only the generated public key in the SSH account's `authorized_keys`,
+preferably restricted to local forwarding for the Fleet endpoint. Keep the
+private key on the client with user-only permissions.
 
 Start it by double-clicking `Start Fleet Tunnel.cmd` or with
 `npm run tunnel:start`. Use `npm run tunnel:status` and

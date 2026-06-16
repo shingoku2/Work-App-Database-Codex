@@ -1,8 +1,24 @@
 import { command } from "@/lib/tauri";
-import type { ConnectionState, PairingInfo, User, UserRole } from "@/types/db";
+import type { ConnectionState, PairingInfo, TunnelConfigInput, TunnelKeyInfo, TunnelStatus, User, UserRole } from "@/types/db";
 
 export function getConnectionState(): Promise<ConnectionState> {
   return command<ConnectionState>("get_connection_state");
+}
+
+export function getTunnelStatus(): Promise<TunnelStatus> {
+  return command<TunnelStatus>("get_tunnel_status");
+}
+
+export function generateTunnelKey(): Promise<TunnelKeyInfo> {
+  return command<TunnelKeyInfo>("generate_tunnel_key");
+}
+
+export function saveTunnelConfig(input: TunnelConfigInput): Promise<TunnelStatus> {
+  return command<TunnelStatus>("save_tunnel_config", { input });
+}
+
+export function startTunnelConnection(): Promise<TunnelStatus> {
+  return command<TunnelStatus>("start_tunnel_connection");
 }
 
 export function probeServer(url: string): Promise<PairingInfo> {
