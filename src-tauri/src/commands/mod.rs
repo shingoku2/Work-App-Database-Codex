@@ -4,6 +4,7 @@ use fleet_shared::{
     CreateUserRequest, CreateWebhook, DashboardSummary, LoginResponse, Miner, MinerImportResult,
     PairingInfo, Part, ResetPasswordRequest, Site, UpdateMiner, UpdateSite, UpdateUserRequest,
     UpdateWebhook, User, Webhook, WebhookDelivery,
+    ApproveTunnelKeyRequest, SubmitTunnelKeyRequest, TunnelKeyRequest,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
@@ -725,4 +726,44 @@ mod tests {
         assert_eq!(status.local_url, "https://localhost:8443");
         assert_eq!(status.remote_target, "127.0.0.1:8443");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Tunnel key requests
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn submit_tunnel_key_request(
+    state: State<'_, ClientState>,
+    input: SubmitTunnelKeyRequest,
+) -> Result<TunnelKeyRequest, String> {
+    state.post_no_auth("/api/v1/tunnel-key-requests", &input).await
+}
+
+#[tauri::command]
+pub async fn list_tunnel_key_requests(
+    state: State<'_, ClientState>,
+) -> Result<Vec<TunnelKeyRequest>, String> {
+    state.get("/api/v1/tunnel-key-requests").await
+}
+
+#[tauri::command]
+pub async fn approve_tunnel_key_request(
+    state: State<'_, ClientState>,
+    id: i64,
+    input: ApproveTunnelKeyRequest,
+) -> Result<TunnelKeyRequest, String> {
+    state
+        .post(&format!("/api/v1/tunnel-key-requests/{id}/approve"), &input)
+        .await
+}
+
+#[tauri::command]
+pub async fn reject_tunnel_key_request(
+    state: State<'_, ClientState>,
+    id: i64,
+) -> Result<(), String> {
+    state
+        .delete(&format!("/api/v1/tunnel-key-requests/{id}"))
+        .await
 }

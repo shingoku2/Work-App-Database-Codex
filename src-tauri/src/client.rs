@@ -265,6 +265,24 @@ impl ClientState {
         self.request(Method::POST, path, Some(body)).await
     }
 
+    /// POST without a bearer token — for unauthenticated endpoints on the
+    /// already-paired server (e.g. `/api/v1/tunnel-key-requests`).
+    pub async fn post_no_auth<B: Serialize + ?Sized, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, String> {
+        let config = self.require_config().await?;
+        let client = build_client(&config)?;
+        let response = client
+            .post(join_url(&config.url, path)?)
+            .json(body)
+            .send()
+            .await
+            .map_err(network_error)?;
+        parse_response(response).await
+    }
+
     pub async fn put<B: Serialize + ?Sized, T: DeserializeOwned>(
         &self,
         path: &str,

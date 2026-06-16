@@ -53,6 +53,10 @@ pub fn run() {
             commands::create_site,
             commands::update_site,
             commands::delete_site,
+            commands::submit_tunnel_key_request,
+            commands::list_tunnel_key_requests,
+            commands::approve_tunnel_key_request,
+            commands::reject_tunnel_key_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
