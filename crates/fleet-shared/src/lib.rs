@@ -401,3 +401,28 @@ mod tests {
         assert!(validate_password("long-enough-1").is_ok());
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tunnel key requests
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubmitTunnelKeyRequest {
+    pub label: String,
+    pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunnelKeyRequest {
+    pub id: i64,
+    pub label: String,
+    pub public_key: String,
+    pub status: String, // "pending" | "approved" | "rejected"
+    pub note: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApproveTunnelKeyRequest {
+    pub note: Option<String>,
+}
