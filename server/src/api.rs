@@ -12,11 +12,11 @@ use axum::{
 use chrono::{Duration, Utc};
 use fleet_shared::{
     normalize_and_validate_miner, normalize_username, validate_part, validate_password, ApiError,
-    AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CountByStatus, CreateMiner, CreatePart,
-    CreateSite, CreateUserRequest, CreateWebhook, DashboardSummary, LoginRequest, LoginResponse,
-    Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest, ServerInfo, Site, SiteQuery,
-    UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook,
-    WebhookDelivery, API_VERSION,
+    ApproveTunnelKeyRequest, AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CountByStatus,
+    CreateMiner, CreatePart, CreateSite, CreateUserRequest, CreateWebhook, DashboardSummary,
+    LoginRequest, LoginResponse, Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest,
+    ServerInfo, Site, SiteQuery, SubmitTunnelKeyRequest, TunnelKeyRequest, UpdateMiner, UpdateSite,
+    UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook, WebhookDelivery, API_VERSION,
 };
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
@@ -304,6 +304,18 @@ pub async fn serve(config: ServerConfig, pool: PgPool) -> Result<(), Box<dyn std
         .route(
             "/api/v1/sites/{id}",
             put(update_site).delete(delete_site),
+        )
+        .route(
+            "/api/v1/tunnel-key-requests",
+            post(submit_tunnel_key_request).get(list_tunnel_key_requests),
+        )
+        .route(
+            "/api/v1/tunnel-key-requests/{id}/approve",
+            post(approve_tunnel_key_request),
+        )
+        .route(
+            "/api/v1/tunnel-key-requests/{id}",
+            axum::routing::delete(delete_tunnel_key_request),
         )
         .layer(RequestBodyLimitLayer::new(30 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
@@ -1641,4 +1653,221 @@ async fn delete_site(
         ));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// Tunnel key requests
+// ---------------------------------------------------------------------------
+
+async fn submit_tunnel_key_request(
+    State(state): State<AppState>,
+    Json(input): Json<SubmitTunnelKeyRequest>,
+) -> AppResult<(StatusCode, Json<TunnelKeyRequest>)> {
+    let label = input.label.trim().to_string();
+    let public_key = input.public_key.trim().to_string();
+
+    if label.is_empty() {
+        return Err(AppError::bad_request("label is required"));
+    }
+    if !label.chars().all(|c| c.is_alphanumeric() || "._@+-".contains(c)) {
+        return Err(AppError::bad_request(
+            "label may contain only letters, numbers, dot, underscore, at, plus, and dash",
+        ));
+    }
+    if public_key.is_empty() {
+        return Err(AppError::bad_request("public_key is required"));
+    }
+    let mut parts = public_key.splitn(3, char::is_whitespace);
+    let key_type = parts.next().unwrap_or("").to_string();
+    let key_body = parts.next().unwrap_or("").to_string();
+    if key_type.is_empty() || key_body.is_empty() {
+        return Err(AppError::bad_request("public_key must be in OpenSSH format"));
+    }
+    let allowed_types = [
+        "ssh-ed25519",
+        "ecdsa-sha2-nistp256",
+        "ecdsa-sha2-nistp384",
+        "ecdsa-sha2-nistp521",
+        "rsa-sha2-256",
+        "rsa-sha2-512",
+        "ssh-rsa",
+    ];
+    if !allowed_types.contains(&key_type.as_str()) {
+        return Err(AppError::bad_request("unsupported public key type"));
+    }
+
+    let row = sqlx::query(
+        "INSERT INTO tunnel_key_requests (label, public_key)
+         VALUES ($1, $2)
+         RETURNING id, label, public_key, status, note, created_at",
+    )
+    .bind(&label)
+    .bind(&public_key)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+
+    Ok((StatusCode::CREATED, Json(tunnel_key_request_from_row(&row))))
+}
+
+async fn list_tunnel_key_requests(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> AppResult<Json<Vec<TunnelKeyRequest>>> {
+    require_admin(&state, &headers).await?;
+    let rows = sqlx::query(
+        "SELECT id, label, public_key, status, note, created_at
+         FROM tunnel_key_requests
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(Json(rows.iter().map(tunnel_key_request_from_row).collect()))
+}
+
+async fn approve_tunnel_key_request(
+    State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(input): Json<ApproveTunnelKeyRequest>,
+) -> AppResult<Json<TunnelKeyRequest>> {
+    let admin = require_admin(&state, &headers).await?;
+
+    let row = sqlx::query(
+        "SELECT id, label, public_key, status, note, created_at
+         FROM tunnel_key_requests WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found("tunnel key request not found"))?;
+
+    if row.get::<String, _>("status") == "approved" {
+        return Err(AppError::bad_request("already approved"));
+    }
+
+    let label: String = row.get("label");
+    let public_key: String = row.get("public_key");
+
+    // Try installed path first, fall back to source checkout path for dev.
+    let installed = "/usr/lib/antminer-fleet-server/authorize-client-tunnel-key.sh";
+    let dev = {
+        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("../../server/scripts/authorize-client-tunnel-key.sh");
+        p
+    };
+    let script_path = if std::path::Path::new(installed).exists() {
+        installed.to_string()
+    } else if dev.exists() {
+        dev.display().to_string()
+    } else {
+        return Err(AppError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: "script_not_found",
+            message: "authorize-client-tunnel-key.sh not found; is the server package installed?"
+                .into(),
+        });
+    };
+
+    let output = tokio::process::Command::new(&script_path)
+        .args(["--label", &label, "--public-key", &public_key])
+        .output()
+        .await
+        .map_err(|e| AppError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: "script_failed",
+            message: format!("Could not run key authorization script: {e}"),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let msg = if stderr.is_empty() { stdout } else { stderr };
+        return Err(AppError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: "script_failed",
+            message: format!("Key authorization script failed: {msg}"),
+        });
+    }
+
+    let updated = sqlx::query(
+        "UPDATE tunnel_key_requests
+         SET status = 'approved', note = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, label, public_key, status, note, created_at",
+    )
+    .bind(input.note.as_deref())
+    .bind(id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+
+    audit_log(
+        &state,
+        Some(admin.id),
+        Some(&admin.username),
+        "tunnel_key.approved",
+        Some("tunnel_key_request"),
+        Some(&id.to_string()),
+        None,
+        None,
+        Some(&serde_json::json!({"label": label})),
+        Some(&remote.ip().to_string()),
+    )
+    .await;
+
+    Ok(Json(tunnel_key_request_from_row(&updated)))
+}
+
+async fn delete_tunnel_key_request(
+    State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> AppResult<StatusCode> {
+    let admin = require_admin(&state, &headers).await?;
+
+    let row = sqlx::query(
+        "DELETE FROM tunnel_key_requests WHERE id = $1
+         RETURNING id, label, public_key, status, note, created_at",
+    )
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if let Some(row) = row {
+        let label: String = row.get("label");
+        audit_log(
+            &state,
+            Some(admin.id),
+            Some(&admin.username),
+            "tunnel_key.rejected",
+            Some("tunnel_key_request"),
+            Some(&id.to_string()),
+            None,
+            None,
+            Some(&serde_json::json!({"label": label})),
+            Some(&remote.ip().to_string()),
+        )
+        .await;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn tunnel_key_request_from_row(row: &sqlx::postgres::PgRow) -> TunnelKeyRequest {
+    TunnelKeyRequest {
+        id: row.get("id"),
+        label: row.get("label"),
+        public_key: row.get("public_key"),
+        status: row.get("status"),
+        note: row.get("note"),
+        created_at: row
+            .get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+            .to_rfc3339(),
+    }
 }
