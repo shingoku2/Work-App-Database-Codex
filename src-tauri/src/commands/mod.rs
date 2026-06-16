@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
 use tauri::State;
-use tauri::AppHandle;
 
 const DEFAULT_TUNNEL_PORT: u16 = 8443;
 
