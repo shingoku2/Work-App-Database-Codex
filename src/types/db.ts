@@ -215,3 +215,25 @@ export interface UpdateSite {
   enabled: boolean;
   version: number;
 }
+
+// ---------------------------------------------------------------------------
+// Tunnel key requests
+// ---------------------------------------------------------------------------
+
+export interface SubmitTunnelKeyRequest {
+  label: string;
+  public_key: string;
+}
+
+export interface TunnelKeyRequest {
+  id: number;
+  label: string;
+  public_key: string;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  created_at: string;
+}
+
+export interface ApproveTunnelKeyRequest {
+  note: string | null;
+}
