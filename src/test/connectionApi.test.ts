@@ -5,6 +5,7 @@ import {
   pairServer,
   probeServer,
   resetUserPassword,
+  submitTunnelKeyRequest,
   updateUser,
 } from "@/features/connection/connectionApi";
 import { command } from "@/lib/tauri";
@@ -77,6 +78,30 @@ describe("connection API", () => {
     expect(mockedCommand).toHaveBeenNthCalledWith(3, "reset_user_password", {
       id: 1,
       input: { password: "reset-password" },
+    });
+  });
+
+  it("submits tunnel key requests with the pre-pair server URL", async () => {
+    mockedCommand.mockResolvedValue({
+      id: 42,
+      label: "alice-workstation",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+      status: "pending",
+      note: null,
+      created_at: "2026-06-16T10:00:00Z",
+    });
+
+    await submitTunnelKeyRequest("https://fleet.example:8443", {
+      label: "alice-workstation",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+    });
+
+    expect(mockedCommand).toHaveBeenCalledWith("submit_tunnel_key_request", {
+      serverUrl: "https://fleet.example:8443",
+      input: {
+        label: "alice-workstation",
+        public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+      },
     });
   });
 });
