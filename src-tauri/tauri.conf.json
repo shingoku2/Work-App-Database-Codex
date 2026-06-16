@@ -28,16 +28,7 @@
     "targets": ["nsis"],
     "icon": ["icons/128x128.png", "icons/icon.ico"],
     "resources": [
-      "../scripts/fleet-tunnel.ps1",
-      "../scripts/openssh-bin/ssh.exe",
-      "../scripts/openssh-bin/ssh-add.exe",
-      "../scripts/openssh-bin/ssh-agent.exe",
-      "../scripts/openssh-bin/ssh-keygen.exe",
-      "../scripts/openssh-bin/ssh-keyscan.exe",
-      "../scripts/openssh-bin/scp.exe",
-      "../scripts/openssh-bin/sftp.exe",
-      "../scripts/openssh-bin/ssh-pkcs11-helper.exe",
-      "../scripts/openssh-bin/ssh-sk-helper.exe"
+      "../scripts/fleet-tunnel.ps1"
     ],
     "windows": {
       "nsis": {
