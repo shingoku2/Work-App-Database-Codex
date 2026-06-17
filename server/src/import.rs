@@ -17,12 +17,11 @@ pub async fn run(
     policy: ConflictPolicy,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Resolve default enabled site for all imported records.
-    let default_site_id: i64 = sqlx::query_scalar(
-        "SELECT id FROM sites WHERE enabled = TRUE ORDER BY id LIMIT 1",
-    )
-    .fetch_optional(postgres)
-    .await?
-    .ok_or("no enabled site found; create a site before importing legacy data")?;
+    let default_site_id: i64 =
+        sqlx::query_scalar("SELECT id FROM sites WHERE enabled = TRUE ORDER BY id LIMIT 1")
+            .fetch_optional(postgres)
+            .await?
+            .ok_or("no enabled site found; create a site before importing legacy data")?;
 
     let url = format!("sqlite://{}?mode=ro", path.to_string_lossy());
     let sqlite = SqlitePool::connect(&url).await?;
@@ -80,31 +79,19 @@ pub async fn run(
     }
 
     // Conflict checks are site-scoped after migration 0005.
-    let miner_conflicts: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM miners WHERE site_id = $1 AND serial = ANY($2)",
-    )
-    .bind(default_site_id)
-    .bind(
-        miners
-            .iter()
-            .map(|m| m.serial.clone())
-            .collect::<Vec<_>>(),
-    )
-    .fetch_one(postgres)
-    .await?;
+    let miner_conflicts: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM miners WHERE site_id = $1 AND serial = ANY($2)")
+            .bind(default_site_id)
+            .bind(miners.iter().map(|m| m.serial.clone()).collect::<Vec<_>>())
+            .fetch_one(postgres)
+            .await?;
 
-    let part_conflicts: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM parts WHERE site_id = $1 AND sku = ANY($2)",
-    )
-    .bind(default_site_id)
-    .bind(
-        parts
-            .iter()
-            .map(|p| p.sku.clone())
-            .collect::<Vec<_>>(),
-    )
-    .fetch_one(postgres)
-    .await?;
+    let part_conflicts: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM parts WHERE site_id = $1 AND sku = ANY($2)")
+            .bind(default_site_id)
+            .bind(parts.iter().map(|p| p.sku.clone()).collect::<Vec<_>>())
+            .fetch_one(postgres)
+            .await?;
 
     println!(
         "SQLite import preview: {} miners ({} conflicts), {} parts ({} conflicts)",

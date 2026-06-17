@@ -121,9 +121,7 @@ impl ServerConfig {
             .iter()
             .any(|placeholder| normalized.contains(placeholder))
         {
-            return Err(
-                "tunnel_client.ssh_destination still contains a placeholder host".into(),
-            );
+            return Err("tunnel_client.ssh_destination still contains a placeholder host".into());
         }
         if !destination.contains('@') {
             return Err(

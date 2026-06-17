@@ -11,14 +11,13 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use fleet_shared::{
-    normalize_and_validate_miner, normalize_username, public_key_fingerprint_sha256,
-    validate_part, validate_password, ApiError, ApproveTunnelKeyRequest, AuditLogEntry,
-    AuditLogQuery, ChangePasswordRequest, CountByStatus, CreateMiner, CreatePart, CreateSite,
-    CreateUserRequest, CreateWebhook, DashboardSummary, LoginRequest, LoginResponse, Miner,
-    MinerImportResult, PairingInfo, Part, ResetPasswordRequest, ServerInfo, Site, SiteQuery,
-    SubmitTunnelKeyRequest, TunnelClientConfig, TunnelKeyRequest, TunnelKeyRequestStatus,
-    UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook,
-    WebhookDelivery, API_VERSION,
+    normalize_and_validate_miner, normalize_username, public_key_fingerprint_sha256, validate_part,
+    validate_password, ApiError, ApproveTunnelKeyRequest, AuditLogEntry, AuditLogQuery,
+    ChangePasswordRequest, CountByStatus, CreateMiner, CreatePart, CreateSite, CreateUserRequest,
+    CreateWebhook, DashboardSummary, LoginRequest, LoginResponse, Miner, MinerImportResult,
+    PairingInfo, Part, ResetPasswordRequest, ServerInfo, Site, SiteQuery, SubmitTunnelKeyRequest,
+    TunnelClientConfig, TunnelKeyRequest, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
+    UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook, WebhookDelivery, API_VERSION,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -340,10 +339,7 @@ pub async fn serve(config: ServerConfig, pool: PgPool) -> Result<(), Box<dyn std
             get(list_webhook_deliveries),
         )
         .route("/api/v1/sites", get(list_sites).post(create_site))
-        .route(
-            "/api/v1/sites/{id}",
-            put(update_site).delete(delete_site),
-        )
+        .route("/api/v1/sites/{id}", put(update_site).delete(delete_site))
         .route(
             "/api/v1/tunnel-key-requests",
             post(submit_tunnel_key_request).get(list_tunnel_key_requests),
@@ -917,11 +913,13 @@ async fn list_miners(
     let (user, _) = authenticated_user(&state, &headers).await?;
     let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
     let rows = if let Some(sid) = site_id {
-        sqlx::query(&format!("{MINER_SELECT} WHERE m.site_id = $1 ORDER BY m.serial"))
-            .bind(sid)
-            .fetch_all(&state.pool)
-            .await
-            .map_err(AppError::database)?
+        sqlx::query(&format!(
+            "{MINER_SELECT} WHERE m.site_id = $1 ORDER BY m.serial"
+        ))
+        .bind(sid)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(AppError::database)?
     } else {
         sqlx::query(&format!("{MINER_SELECT} ORDER BY m.serial"))
             .fetch_all(&state.pool)
@@ -963,11 +961,18 @@ async fn create_miner(
     .bind(&input.notes).fetch_one(&state.pool).await.map_err(AppError::database)?;
     let miner = miner_from_row(&row);
     audit_log(
-        &state, Some(user.id), Some(&user.username), "miner.created",
-        Some("miner"), Some(&miner.id.to_string()), Some(&miner.serial),
-        None, Some(&serde_json::json!({"serial": miner.serial, "model": miner.model})),
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "miner.created",
+        Some("miner"),
+        Some(&miner.id.to_string()),
+        Some(&miner.serial),
+        None,
+        Some(&serde_json::json!({"serial": miner.serial, "model": miner.model})),
         Some(&remote.ip().to_string()),
-    ).await;
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(miner)))
 }
 
@@ -1026,11 +1031,18 @@ async fn update_miner(
     .ok_or_else(|| AppError::conflict("miner changed or was deleted; reload and try again"))?;
     let miner = miner_from_row(&row);
     audit_log(
-        &state, Some(user.id), Some(&user.username), "miner.updated",
-        Some("miner"), Some(&miner.id.to_string()), Some(&miner.serial),
-        None, Some(&serde_json::json!({"serial": miner.serial, "status": miner.status})),
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "miner.updated",
+        Some("miner"),
+        Some(&miner.id.to_string()),
+        Some(&miner.serial),
+        None,
+        Some(&serde_json::json!({"serial": miner.serial, "status": miner.status})),
         Some(&remote.ip().to_string()),
-    ).await;
+    )
+    .await;
     Ok(Json(miner))
 }
 
@@ -1043,7 +1055,10 @@ async fn delete_miner(
 ) -> AppResult<StatusCode> {
     let (user, _) = authenticated_user(&state, &headers).await?;
     let serial: Option<String> = sqlx::query_scalar("SELECT serial FROM miners WHERE id=$1")
-        .bind(id).fetch_optional(&state.pool).await.map_err(AppError::database)?;
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(AppError::database)?;
     let result = sqlx::query("DELETE FROM miners WHERE id=$1 AND version=$2")
         .bind(id)
         .bind(query.version)
@@ -1056,10 +1071,18 @@ async fn delete_miner(
         ));
     }
     audit_log(
-        &state, Some(user.id), Some(&user.username), "miner.deleted",
-        Some("miner"), Some(&id.to_string()), serial.as_deref(),
-        None, None, Some(&remote.ip().to_string()),
-    ).await;
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "miner.deleted",
+        Some("miner"),
+        Some(&id.to_string()),
+        serial.as_deref(),
+        None,
+        None,
+        Some(&remote.ip().to_string()),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1154,11 +1177,13 @@ async fn list_parts(
     let (user, _) = authenticated_user(&state, &headers).await?;
     let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
     let rows = if let Some(sid) = site_id {
-        sqlx::query(&format!("{PART_SELECT} WHERE p.site_id = $1 ORDER BY p.name"))
-            .bind(sid)
-            .fetch_all(&state.pool)
-            .await
-            .map_err(AppError::database)?
+        sqlx::query(&format!(
+            "{PART_SELECT} WHERE p.site_id = $1 ORDER BY p.name"
+        ))
+        .bind(sid)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(AppError::database)?
     } else {
         sqlx::query(&format!("{PART_SELECT} ORDER BY p.name"))
             .fetch_all(&state.pool)
@@ -1193,11 +1218,18 @@ async fn create_part(
     .fetch_one(&state.pool).await.map_err(AppError::database)?;
     let part = part_from_row(&row);
     audit_log(
-        &state, Some(user.id), Some(&user.username), "part.created",
-        Some("part"), Some(&part.sku), None,
-        None, Some(&serde_json::json!({"sku": part.sku, "name": part.name})),
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "part.created",
+        Some("part"),
+        Some(&part.sku),
+        None,
+        None,
+        Some(&serde_json::json!({"sku": part.sku, "name": part.name})),
         Some(&remote.ip().to_string()),
-    ).await;
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
@@ -1234,11 +1266,18 @@ async fn update_part(
     .ok_or_else(|| AppError::conflict("part changed or was deleted; reload and try again"))?;
     let part = part_from_row(&row);
     audit_log(
-        &state, Some(user.id), Some(&user.username), "part.updated",
-        Some("part"), Some(&part.sku), None,
-        None, Some(&serde_json::json!({"sku": part.sku, "qty_on_hand": part.qty_on_hand})),
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "part.updated",
+        Some("part"),
+        Some(&part.sku),
+        None,
+        None,
+        Some(&serde_json::json!({"sku": part.sku, "qty_on_hand": part.qty_on_hand})),
         Some(&remote.ip().to_string()),
-    ).await;
+    )
+    .await;
     Ok(Json(part))
 }
 
@@ -1270,10 +1309,18 @@ async fn delete_part(
         ));
     }
     audit_log(
-        &state, Some(user.id), Some(&user.username), "part.deleted",
-        Some("part"), Some(&sku), None,
-        None, None, Some(&remote.ip().to_string()),
-    ).await;
+        &state,
+        Some(user.id),
+        Some(&user.username),
+        "part.deleted",
+        Some("part"),
+        Some(&sku),
+        None,
+        None,
+        None,
+        Some(&remote.ip().to_string()),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1307,7 +1354,9 @@ async fn dashboard(
             .bind(sid).fetch_all(&state.pool).await.map_err(AppError::database)?
     } else {
         sqlx::query("SELECT status, COUNT(*) count FROM miners GROUP BY status ORDER BY status")
-            .fetch_all(&state.pool).await.map_err(AppError::database)?
+            .fetch_all(&state.pool)
+            .await
+            .map_err(AppError::database)?
     };
     let low_parts = if let Some(sid) = bind_sid {
         sqlx::query(&format!("{PART_SELECT} WHERE p.site_id=$1 AND p.qty_on_hand <= p.reorder_threshold ORDER BY p.qty_on_hand, p.name LIMIT 10"))
@@ -1385,12 +1434,24 @@ async fn list_audit_log(
     );
 
     let mut q = sqlx::query(&sql);
-    if let Some(v) = query.user_id { q = q.bind(v); }
-    if let Some(v) = query.action { q = q.bind(v); }
-    if let Some(v) = query.target_type { q = q.bind(v); }
-    if let Some(v) = query.target_id { q = q.bind(v); }
-    if let Some(v) = query.from { q = q.bind(v); }
-    if let Some(v) = query.to { q = q.bind(v); }
+    if let Some(v) = query.user_id {
+        q = q.bind(v);
+    }
+    if let Some(v) = query.action {
+        q = q.bind(v);
+    }
+    if let Some(v) = query.target_type {
+        q = q.bind(v);
+    }
+    if let Some(v) = query.target_id {
+        q = q.bind(v);
+    }
+    if let Some(v) = query.from {
+        q = q.bind(v);
+    }
+    if let Some(v) = query.to {
+        q = q.bind(v);
+    }
 
     let rows = q.fetch_all(&state.pool).await.map_err(AppError::database)?;
     let entries = rows
@@ -1510,9 +1571,7 @@ async fn update_webhook(
         return Err(AppError::bad_request("webhook URL is required"));
     }
     // null / "" / "********" → preserve; any other non-empty → replace
-    let secret_update = input
-        .secret
-        .filter(|s| !s.is_empty() && s != SECRET_MASK);
+    let secret_update = input.secret.filter(|s| !s.is_empty() && s != SECRET_MASK);
 
     let row = if let Some(new_secret) = secret_update {
         sqlx::query(
@@ -1669,24 +1728,21 @@ async fn delete_site(
 ) -> AppResult<StatusCode> {
     require_admin(&state, &headers).await?;
     // Reject if any users/miners/parts still reference this site
-    let miner_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM miners WHERE site_id=$1")
-            .bind(id)
-            .fetch_one(&state.pool)
-            .await
-            .map_err(AppError::database)?;
-    let part_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM parts WHERE site_id=$1")
-            .bind(id)
-            .fetch_one(&state.pool)
-            .await
-            .map_err(AppError::database)?;
-    let user_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE site_id=$1")
-            .bind(id)
-            .fetch_one(&state.pool)
-            .await
-            .map_err(AppError::database)?;
+    let miner_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM miners WHERE site_id=$1")
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(AppError::database)?;
+    let part_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM parts WHERE site_id=$1")
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(AppError::database)?;
+    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE site_id=$1")
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(AppError::database)?;
     if miner_count + part_count + user_count > 0 {
         return Err(AppError::bad_request(
             "site is still referenced by users, miners, or parts; reassign them first",
@@ -1720,7 +1776,10 @@ async fn submit_tunnel_key_request(
     if label.is_empty() {
         return Err(AppError::bad_request("label is required"));
     }
-    if !label.chars().all(|c| c.is_alphanumeric() || "._@+-".contains(c)) {
+    if !label
+        .chars()
+        .all(|c| c.is_alphanumeric() || "._@+-".contains(c))
+    {
         return Err(AppError::bad_request(
             "label may contain only letters, numbers, dot, underscore, at, plus, and dash",
         ));
@@ -1732,7 +1791,9 @@ async fn submit_tunnel_key_request(
     let key_type = parts.next().unwrap_or("").to_string();
     let key_body = parts.next().unwrap_or("").to_string();
     if key_type.is_empty() || key_body.is_empty() {
-        return Err(AppError::bad_request("public_key must be in OpenSSH format"));
+        return Err(AppError::bad_request(
+            "public_key must be in OpenSSH format",
+        ));
     }
     let allowed_types = [
         "ssh-ed25519",
@@ -1799,7 +1860,9 @@ async fn approve_tunnel_key_request(
     .ok_or_else(|| AppError::not_found("tunnel key request not found"))?;
 
     if row.get::<String, _>("status") != "pending" {
-        return Err(AppError::bad_request("only pending requests can be approved"));
+        return Err(AppError::bad_request(
+            "only pending requests can be approved",
+        ));
     }
 
     let label: String = row.get("label");
@@ -1878,7 +1941,9 @@ async fn reject_tunnel_key_request(
 
     let status: String = row.get("status");
     if status != "pending" {
-        return Err(AppError::bad_request("only pending requests can be rejected"));
+        return Err(AppError::bad_request(
+            "only pending requests can be rejected",
+        ));
     }
 
     let label: String = row.get("label");
@@ -1932,7 +1997,9 @@ async fn revoke_tunnel_key_request(
 
     let status: String = row.get("status");
     if status != "approved" {
-        return Err(AppError::bad_request("only approved requests can be revoked"));
+        return Err(AppError::bad_request(
+            "only approved requests can be revoked",
+        ));
     }
 
     let label: String = row.get("label");

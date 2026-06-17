@@ -16,7 +16,10 @@ pub struct TunnelKeyOnboardingState {
 }
 
 fn onboarding_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     fs::create_dir_all(&app_data).map_err(|error| error.to_string())?;
     Ok(app_data.join(ONBOARDING_FILE))
 }
@@ -30,7 +33,9 @@ pub fn save_tunnel_key_onboarding(
     fs::write(path, json).map_err(|error| error.to_string())
 }
 
-pub fn load_tunnel_key_onboarding(app: &AppHandle) -> Result<Option<TunnelKeyOnboardingState>, String> {
+pub fn load_tunnel_key_onboarding(
+    app: &AppHandle,
+) -> Result<Option<TunnelKeyOnboardingState>, String> {
     let path = onboarding_path(app)?;
     if !path.is_file() {
         return Ok(None);

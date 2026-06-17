@@ -403,7 +403,8 @@ mod tests {
 
     #[test]
     fn public_key_fingerprint_parses_ed25519() {
-        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWiVhcv4K4fFL test";
+        let key =
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWiVhcv4K4fFL test";
         let fp = public_key_fingerprint_sha256(key);
         assert!(fp.is_some());
         assert!(fp.unwrap().starts_with("SHA256:"));

@@ -32,6 +32,8 @@ fn write_config(
         directory.join("server.key")
     };
     let config = directory.join("server.toml");
+    let tunnel_client_block = "[tunnel_client]\n\
+                                ssh_destination = \"antminer-fleet-client-tunnel@127.0.0.1\"\n";
     fs::write(
         &config,
         format!(
@@ -42,7 +44,8 @@ fn write_config(
              max_connections = {max_connections}\n\
              [tls]\n\
              certificate = '{}'\n\
-             private_key = '{}'\n",
+             private_key = '{}'\n\
+             {tunnel_client_block}",
             certificate.display(),
             private_key.display(),
         ),

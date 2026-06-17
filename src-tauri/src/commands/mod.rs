@@ -1,18 +1,19 @@
 use crate::client::{ClientState, ConnectionState};
 use fleet_shared::{
-    AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CreateMiner, CreatePart, CreateSite,
-    CreateUserRequest, CreateWebhook, DashboardSummary, LoginResponse, Miner, MinerImportResult,
-    PairingInfo, Part, ResetPasswordRequest, Site, UpdateMiner, UpdateSite, UpdateUserRequest,
-    UpdateWebhook, User, Webhook, WebhookDelivery,
-    ApproveTunnelKeyRequest, SubmitTunnelKeyRequest, TunnelKeyRequest,
-    TunnelKeyRequestStatus,
+    ApproveTunnelKeyRequest, AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CreateMiner,
+    CreatePart, CreateSite, CreateUserRequest, CreateWebhook, DashboardSummary, LoginResponse,
+    Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest, Site,
+    SubmitTunnelKeyRequest, TunnelKeyRequest, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
+    UpdateUserRequest, UpdateWebhook, User, Webhook, WebhookDelivery,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
 use tauri::State;
+#[cfg(target_os = "windows")]
+use tauri::Manager;
+use tauri::AppHandle;
 
 const DEFAULT_TUNNEL_PORT: u16 = 8443;
 
@@ -495,6 +496,7 @@ fn tunnel_script_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 fn tunnel_script_path(_app: &AppHandle) -> Result<PathBuf, String> {
     Err("SSH tunnel setup is only supported by the Windows desktop build".into())
 }
@@ -766,10 +768,7 @@ pub async fn reject_tunnel_key_request(
     input: ApproveTunnelKeyRequest,
 ) -> Result<TunnelKeyRequest, String> {
     state
-        .post(
-            &format!("/api/v1/tunnel-key-requests/{id}/reject"),
-            &input,
-        )
+        .post(&format!("/api/v1/tunnel-key-requests/{id}/reject"), &input)
         .await
 }
 
@@ -780,10 +779,7 @@ pub async fn revoke_tunnel_key_request(
     input: ApproveTunnelKeyRequest,
 ) -> Result<TunnelKeyRequest, String> {
     state
-        .post(
-            &format!("/api/v1/tunnel-key-requests/{id}/revoke"),
-            &input,
-        )
+        .post(&format!("/api/v1/tunnel-key-requests/{id}/revoke"), &input)
         .await
 }
 
