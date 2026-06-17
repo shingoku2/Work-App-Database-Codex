@@ -12,8 +12,23 @@ pub struct ServerConfig {
     pub listen: SocketAddr,
     pub database: DatabaseConfig,
     pub tls: TlsConfig,
+    #[serde(default = "default_tunnel_client")]
+    pub tunnel_client: TunnelClientConfig,
     #[serde(default = "default_session_days")]
     pub session_days: i64,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct TunnelClientConfig {
+    pub ssh_destination: String,
+    #[serde(default = "default_ssh_port")]
+    pub ssh_port: u16,
+    #[serde(default = "default_local_port")]
+    pub local_port: u16,
+    #[serde(default = "default_remote_host")]
+    pub remote_host: String,
+    #[serde(default = "default_remote_port")]
+    pub remote_port: u16,
 }
 
 #[derive(Clone, Deserialize)]
@@ -35,6 +50,32 @@ fn default_connections() -> u32 {
 
 fn default_session_days() -> i64 {
     30
+}
+
+fn default_ssh_port() -> u16 {
+    22
+}
+
+fn default_local_port() -> u16 {
+    8443
+}
+
+fn default_remote_host() -> String {
+    "127.0.0.1".into()
+}
+
+fn default_remote_port() -> u16 {
+    8443
+}
+
+fn default_tunnel_client() -> TunnelClientConfig {
+    TunnelClientConfig {
+        ssh_destination: "antminer-fleet-client-tunnel@CHANGE_ME".into(),
+        ssh_port: default_ssh_port(),
+        local_port: default_local_port(),
+        remote_host: default_remote_host(),
+        remote_port: default_remote_port(),
+    }
 }
 
 impl ServerConfig {
@@ -65,7 +106,42 @@ impl ServerConfig {
         if !(1..=365).contains(&self.session_days) {
             return Err("session_days must be between 1 and 365".into());
         }
+        self.validate_tunnel_client()?;
         self.validate_tls_paths()?;
+        Ok(())
+    }
+
+    fn validate_tunnel_client(&self) -> Result<(), String> {
+        let destination = self.tunnel_client.ssh_destination.trim();
+        if destination.is_empty() {
+            return Err("tunnel_client.ssh_destination must not be empty".into());
+        }
+        let normalized = destination.to_ascii_lowercase();
+        if ["change_me", "changeme", "replace_me", "replace-with"]
+            .iter()
+            .any(|placeholder| normalized.contains(placeholder))
+        {
+            return Err(
+                "tunnel_client.ssh_destination still contains a placeholder host".into(),
+            );
+        }
+        if !destination.contains('@') {
+            return Err(
+                "tunnel_client.ssh_destination must be user@host, e.g. antminer-fleet-client-tunnel@ssh.example".into(),
+            );
+        }
+        if !(1..=65535).contains(&self.tunnel_client.ssh_port) {
+            return Err("tunnel_client.ssh_port must be between 1 and 65535".into());
+        }
+        if !(1..=65535).contains(&self.tunnel_client.local_port) {
+            return Err("tunnel_client.local_port must be between 1 and 65535".into());
+        }
+        if self.tunnel_client.remote_host.trim().is_empty() {
+            return Err("tunnel_client.remote_host must not be empty".into());
+        }
+        if !(1..=65535).contains(&self.tunnel_client.remote_port) {
+            return Err("tunnel_client.remote_port must be between 1 and 65535".into());
+        }
         Ok(())
     }
 
@@ -148,6 +224,13 @@ mod tests {
                 certificate: "server.crt".into(),
                 private_key: "server.key".into(),
             },
+            tunnel_client: TunnelClientConfig {
+                ssh_destination: "antminer-fleet-client-tunnel@127.0.0.1".into(),
+                ssh_port: 22,
+                local_port: 8443,
+                remote_host: "127.0.0.1".into(),
+                remote_port: 8443,
+            },
             session_days: 30,
         }
     }
@@ -168,6 +251,10 @@ mod tests {
 
         let mut value = config();
         value.session_days = 366;
+        assert!(value.validate_base().is_err());
+
+        let mut value = config();
+        value.tunnel_client.ssh_destination = "antminer-fleet-client-tunnel@CHANGE_ME".into();
         assert!(value.validate_base().is_err());
     }
 }

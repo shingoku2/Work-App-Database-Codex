@@ -400,6 +400,14 @@ mod tests {
         assert!(validate_password("short").is_err());
         assert!(validate_password("long-enough-1").is_ok());
     }
+
+    #[test]
+    fn public_key_fingerprint_parses_ed25519() {
+        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWiVhcv4K4fFL test";
+        let fp = public_key_fingerprint_sha256(key);
+        assert!(fp.is_some());
+        assert!(fp.unwrap().starts_with("SHA256:"));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -417,12 +425,41 @@ pub struct TunnelKeyRequest {
     pub id: i64,
     pub label: String,
     pub public_key: String,
-    pub status: String, // "pending" | "approved" | "rejected"
+    pub status: String, // "pending" | "approved" | "rejected" | "revoked"
     pub note: Option<String>,
+    pub status_token: String,
+    pub fingerprint_sha256: Option<String>,
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApproveTunnelKeyRequest {
     pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunnelClientConfig {
+    pub ssh_destination: String,
+    pub ssh_port: u16,
+    pub local_port: u16,
+    pub remote_host: String,
+    pub remote_port: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TunnelKeyRequestStatus {
+    pub id: i64,
+    pub status: String,
+    pub note: Option<String>,
+    pub client_config: Option<TunnelClientConfig>,
+}
+
+/// OpenSSH SHA256 fingerprint (`SHA256:...`) or `None` when the key cannot be parsed.
+pub fn public_key_fingerprint_sha256(public_key: &str) -> Option<String> {
+    use ssh_key::{HashAlg, PublicKey};
+    public_key
+        .trim()
+        .parse::<PublicKey>()
+        .ok()
+        .map(|key| key.fingerprint(HashAlg::Sha256).to_string())
 }

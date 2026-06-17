@@ -15,3 +15,11 @@ max_connections = 10
 # Required paths. Both files must exist, parse, and match for validation/startup.
 certificate = "/etc/antminer-fleet/tls/server.crt"
 private_key = "/etc/antminer-fleet/tls/server.key"
+
+[tunnel_client]
+# SSH destination handed to approved desktop clients. Replace CHANGE_ME before validate-config.
+ssh_destination = "antminer-fleet-client-tunnel@CHANGE_ME"
+ssh_port = 22
+local_port = 8443
+remote_host = "127.0.0.1"
+remote_port = 8443

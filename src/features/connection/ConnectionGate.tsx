@@ -4,17 +4,23 @@ import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/componen
 import { initialServerUrl } from "@/config/server";
 import type { PairingInfo, TunnelKeyInfo, TunnelKeyRequest, TunnelStatus, User } from "@/types/db";
 import {
+  clearTunnelKeyOnboarding,
+  formatOnboardingBundle,
   generateTunnelKey,
   getConnectionState,
+  getTunnelKeyRequestStatus,
   getTunnelStatus,
+  loadTunnelKeyOnboarding,
   login,
   pairServer,
   probeServer,
   saveTunnelConfig,
+  saveTunnelKeyOnboarding,
   startTunnelConnection,
   submitTunnelKeyRequest,
   unpairServer,
 } from "./connectionApi";
+import type { TunnelClientConfig } from "@/types/db";
 
 export function ConnectionGate({
   children,
@@ -84,6 +90,74 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
   const [serverUrl, setServerUrl] = useState(initialServerUrl);
   const [key, setKey] = useState<TunnelKeyInfo | null>(null);
   const [pendingRequest, setPendingRequest] = useState<TunnelKeyRequest | null>(null);
+  const [statusToken, setStatusToken] = useState<string | null>(null);
+  const [approvedReady, setApprovedReady] = useState(false);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTunnelKeyOnboarding()
+      .then((saved) => {
+        if (cancelled || !saved) {
+          return;
+        }
+        setLabel(saved.label);
+        setServerUrl(saved.server_url);
+        setIdentityFile(saved.identity_file);
+        setKey({
+          identity_file: saved.identity_file,
+          public_key_file: "",
+          public_key: saved.public_key,
+        });
+        if (saved.request_id != null && saved.status_token) {
+          setPendingRequest({
+            id: saved.request_id,
+            label: saved.label,
+            public_key: saved.public_key,
+            status: "pending",
+            note: null,
+            status_token: saved.status_token,
+            fingerprint_sha256: null,
+            created_at: "",
+          });
+          setStatusToken(saved.status_token);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setOnboardingLoaded(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const serverReachable = useQuery({
+    queryKey: ["serverReachable", serverUrl],
+    queryFn: () => probeServer(serverUrl.trim()),
+    enabled: onboardingLoaded && Boolean(key && serverUrl.trim()),
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const persistOnboarding = async (
+    request: TunnelKeyRequest | null,
+    token: string | null,
+  ) => {
+    if (!key || !label.trim() || !serverUrl.trim()) {
+      return;
+    }
+    await saveTunnelKeyOnboarding({
+      request_id: request?.id ?? null,
+      status_token: token,
+      label: label.trim(),
+      public_key: key.public_key,
+      server_url: serverUrl.trim(),
+      identity_file: key.identity_file,
+    });
+  };
 
   const generateKey = useMutation({
     mutationFn: generateTunnelKey,
@@ -99,12 +173,25 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
         label: label.trim(),
         public_key: key!.public_key,
       }),
-    onSuccess: (req) => setPendingRequest(req),
+    onSuccess: async (req) => {
+      setPendingRequest(req);
+      setStatusToken(req.status_token);
+      setApprovedReady(false);
+      await persistOnboarding(req, req.status_token);
+    },
     onError: (error) => {
-      // Error is handled by the mutation's error state
       console.error("Failed to submit tunnel key:", error);
     },
   });
+
+  const applyClientConfig = (config: TunnelClientConfig) => {
+    setSshDestination(config.ssh_destination);
+    setSshPort(String(config.ssh_port));
+    setLocalPort(String(config.local_port));
+    setRemoteHost(config.remote_host);
+    setRemotePort(String(config.remote_port));
+    setApprovedReady(true);
+  };
 
   const startExisting = useMutation({ mutationFn: startTunnelConnection, onSuccess: onComplete });
   const save = useMutation({
@@ -117,15 +204,50 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
         remote_host: remoteHost,
         remote_port: Number(remotePort),
       }),
-    onSuccess: onComplete,
+    onSuccess: async () => {
+      await clearTunnelKeyOnboarding();
+      onComplete();
+    },
   });
+
+  const handleCopyBundle = async () => {
+    if (!key || !label.trim()) {
+      return;
+    }
+    const bundle = formatOnboardingBundle(label.trim(), key.public_key);
+    await navigator.clipboard.writeText(bundle);
+    await persistOnboarding(pendingRequest, statusToken);
+    setCopyMessage("Onboarding bundle copied to clipboard.");
+  };
+
+  const handleStartOver = async () => {
+    setPendingRequest(null);
+    setStatusToken(null);
+    setApprovedReady(false);
+    setKey(null);
+    setCopyMessage(null);
+    await clearTunnelKeyOnboarding();
+  };
+
+  const canSubmit =
+    Boolean(key && label.trim() && serverUrl.trim()) &&
+    serverReachable.isSuccess &&
+    !serverReachable.isFetching;
+
+  if (!onboardingLoaded) {
+    return (
+      <FullPageCard title="Set up SSH tunnel">
+        <p className="text-sm text-slate-400">Loading saved onboarding state...</p>
+      </FullPageCard>
+    );
+  }
 
   return (
     <FullPageCard title="Set up SSH tunnel">
       <div className="space-y-4 text-sm text-slate-300">
         <p>
-          Create this computer's own SSH tunnel. Do not use Eddie's SSH login. Enter a label (your name
-          or machine tag), generate a local key, and submit it for admin approval.
+          Create this computer&apos;s own SSH tunnel. Do not use Eddie&apos;s SSH login. Enter a label
+          (your name or machine tag), generate a local key, and submit it for admin approval.
         </p>
         {status.configured && status.error && <ErrorText error={status.error} />}
         {status.configured && (
@@ -137,8 +259,19 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             {startExisting.error && <ErrorText error={startExisting.error} />}
           </div>
         )}
-        {pendingRequest ? (
-          <WaitingForApproval request={pendingRequest} onCancel={() => setPendingRequest(null)} />
+        {pendingRequest && statusToken ? (
+          <WaitingForApproval
+            serverUrl={serverUrl.trim()}
+            request={pendingRequest}
+            statusToken={statusToken}
+            onApproved={(config) => {
+              setPendingRequest(null);
+              setStatusToken(null);
+              applyClientConfig(config);
+            }}
+            onRejected={handleStartOver}
+            onCancel={handleStartOver}
+          />
         ) : (
           <>
             <input
@@ -159,30 +292,58 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
               disabled={generateKey.isPending || !label.trim() || !serverUrl.trim()}
               onClick={() => generateKey.mutate()}
             >
-              Generate This Computer's SSH Key
+              Generate This Computer&apos;s SSH Key
             </button>
             {generateKey.error && <ErrorText error={generateKey.error} />}
-            {key && !pendingRequest && (
+            {key && (
               <div className="rounded-md border border-white/10 bg-black/20 p-4">
                 <div className="mb-2 text-xs uppercase text-slate-500">
-                  Send this public key to the server administrator
+                  Share this public key with an admin
                 </div>
+                <p className="mb-2 text-xs text-slate-400">
+                  The private key stays on this computer and must never be sent. Only the public key is
+                  safe to share.
+                </p>
                 <textarea className={`${fieldClass} h-28 w-full font-mono text-xs`} readOnly value={key.public_key} />
-                <div className="mt-2 text-xs text-slate-400">Private key stays on this computer: {key.identity_file}</div>
+                <div className="mt-2 text-xs text-slate-400">Private key path: {key.identity_file}</div>
               </div>
             )}
-            {key && !pendingRequest && (
-              <button
-                className={primaryButtonClass}
-                disabled={submitKey.isPending || !label.trim() || !serverUrl.trim()}
-                onClick={() => submitKey.mutate()}
-              >
-                Submit Key for Admin Approval
-              </button>
+            {key && serverUrl.trim() && serverReachable.isError && (
+              <p className="text-xs text-amber-200">
+                Server not reachable from this network. Copy the onboarding bundle and send it to an admin.
+              </p>
             )}
+            {key && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={primaryButtonClass}
+                  disabled={submitKey.isPending || !canSubmit}
+                  onClick={() => submitKey.mutate()}
+                >
+                  Submit Key for Admin Approval
+                </button>
+                <button
+                  className={secondaryButtonClass}
+                  disabled={!label.trim() || !key}
+                  onClick={() => void handleCopyBundle()}
+                >
+                  Copy Onboarding Bundle
+                </button>
+              </div>
+            )}
+            {copyMessage && <p className="text-xs text-emerald-300">{copyMessage}</p>}
             {submitKey.error && <ErrorText error={submitKey.error} />}
             <hr className="border-white/10" />
-            <p className="text-xs text-slate-500">Or configure manually if the admin has already authorized your key:</p>
+            <p className="text-xs text-slate-500">
+              After an admin approves your public key, enter the Tunnel SSH Destination they provide. Use
+              the restricted tunnel account they give you, not a personal SSH login.
+            </p>
+            {approvedReady && (
+              <p className="text-xs text-emerald-300">
+                Your key was approved. Review the prefilled tunnel settings below, then save and start the
+                tunnel.
+              </p>
+            )}
             <form
               className="space-y-3"
               onSubmit={(event) => {
@@ -190,7 +351,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
                 save.mutate();
               }}
             >
-              <input className={`${fieldClass} w-full`} placeholder="SSH destination, e.g. fleet-user@ssh-host.example" value={sshDestination} onChange={(event) => setSshDestination(event.target.value)} />
+              <input className={`${fieldClass} w-full`} aria-label="Tunnel SSH Destination" placeholder="Tunnel SSH Destination, e.g. antminer-fleet-client-tunnel@ssh-host.example" value={sshDestination} onChange={(event) => setSshDestination(event.target.value)} />
               <input className={`${fieldClass} w-full`} placeholder="Private key path" value={identityFile} onChange={(event) => setIdentityFile(event.target.value)} />
               <div className="grid grid-cols-3 gap-2">
                 <input className={`${fieldClass} w-full`} aria-label="SSH port" value={sshPort} onChange={(event) => setSshPort(event.target.value)} />
@@ -199,7 +360,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
               </div>
               <input className={`${fieldClass} w-full`} placeholder="Remote host on SSH server" value={remoteHost} onChange={(event) => setRemoteHost(event.target.value)} />
               <button className={primaryButtonClass} disabled={save.isPending || !sshDestination.trim()}>
-                Save and Start Tunnel
+                {approvedReady ? "Approved — Save and Start Tunnel" : "Save and Start Tunnel"}
               </button>
               {save.error && <ErrorText error={save.error} />}
             </form>
@@ -211,30 +372,53 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
 }
 
 function WaitingForApproval({
+  serverUrl,
   request,
+  statusToken,
+  onApproved,
+  onRejected,
   onCancel,
 }: {
+  serverUrl: string;
   request: TunnelKeyRequest;
+  statusToken: string;
+  onApproved: (config: TunnelClientConfig) => void;
+  onRejected: () => void;
   onCancel: () => void;
 }) {
-  const queryClient = useQueryClient();
+  const statusQuery = useQuery({
+    queryKey: ["tunnelKeyStatus", serverUrl, request.id, statusToken],
+    queryFn: () => getTunnelKeyRequestStatus(serverUrl, request.id, statusToken),
+    refetchInterval: 10_000,
+    retry: false,
+  });
 
   useEffect(() => {
-    const id = setInterval(
-      () => queryClient.invalidateQueries({ queryKey: ["tunnel"] }),
-      10_000,
-    );
-    return () => clearInterval(id);
-  }, [queryClient]);
+    const current = statusQuery.data;
+    if (!current) {
+      return;
+    }
+    if (current.status === "approved" && current.client_config) {
+      onApproved(current.client_config);
+    } else if (current.status === "rejected" || current.status === "revoked") {
+      onRejected();
+    }
+  }, [statusQuery.data, onApproved, onRejected]);
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
       <p>
         Your SSH key has been submitted (request #{request.id}, label:{" "}
         <span className="font-mono text-slate-100">{request.label}</span>).
-        Ask your server administrator to approve it in the Fleet Manager admin
-        panel. This screen checks for approval every 10 seconds.
+        Ask an admin to approve it in Fleet Manager → Tunnel Keys. This screen checks for approval
+        every 10 seconds.
       </p>
+      {statusQuery.data?.status === "rejected" || statusQuery.data?.status === "revoked" ? (
+        <p className="text-amber-200">
+          This request was {statusQuery.data.status}.
+          {statusQuery.data.note ? ` Note: ${statusQuery.data.note}` : ""}
+        </p>
+      ) : null}
       <div className="rounded-md border border-white/10 bg-black/20 p-4">
         <div className="mb-2 text-xs uppercase text-slate-500">
           Public key (for manual fallback)
@@ -245,6 +429,7 @@ function WaitingForApproval({
           value={request.public_key}
         />
       </div>
+      {statusQuery.error && <ErrorText error={statusQuery.error} />}
       <button className="text-xs text-slate-400 underline" onClick={onCancel}>
         Start over
       </button>

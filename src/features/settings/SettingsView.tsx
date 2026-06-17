@@ -16,7 +16,6 @@ import {
   listWebhooks,
   updateWebhook,
 } from "./webhookApi";
-import { TunnelKeyRequestsView } from "./TunnelKeyRequestsView";
 
 const ALL_EVENTS = [
   "miner.created",
@@ -123,7 +122,13 @@ export function SettingsView({ user, serverUrl }: { user: User; serverUrl: strin
           </div>
         </Panel>
       )}
-      {user.role === "admin" && <TunnelKeyRequestsView />}
+      {user.role === "admin" && (
+        <Panel title="SSH Tunnel Keys">
+          <p className="mb-3 text-sm text-slate-400">
+            Manage pending tunnel key requests from the dedicated Tunnel Keys page in the sidebar.
+          </p>
+        </Panel>
+      )}
       <button
         className={secondaryButtonClass}
         disabled={logoutMutation.isPending}

@@ -95,6 +95,8 @@ to `%LOCALAPPDATA%\AntminerFleetManager\fleet-tunnel.local.json`. Do not reuse a
 developer SSH login, do not bundle private keys, and do not commit
 machine-local tunnel config.
 
+See [docs/ssh-tunnel-onboarding.md](docs/ssh-tunnel-onboarding.md) for the full admin and user onboarding flow.
+
 SSH key or agent authentication must work without a password prompt. The Windows
 installer checks for OpenSSH Client and installs the Windows optional feature
 when `ssh.exe` is missing, then the desktop app starts the user's saved tunnel

@@ -1,8 +1,8 @@
-import { Boxes, Building2, ClipboardList, Gauge, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
+import { Boxes, Building2, ClipboardList, Gauge, KeyRound, LayoutDashboard, Settings, Users, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import type { User } from "@/types/db";
 
-export type ViewKey = "dashboard" | "units" | "inventory" | "accounts" | "sites" | "audit" | "settings";
+export type ViewKey = "dashboard" | "units" | "inventory" | "accounts" | "sites" | "audit" | "tunnelKeys" | "settings";
 
 const baseNav = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -30,6 +30,7 @@ export function AppShell({
           { key: "accounts" as const, label: "Accounts", icon: Users },
           { key: "sites" as const, label: "Sites", icon: Building2 },
           { key: "audit" as const, label: "Audit Log", icon: ClipboardList },
+          { key: "tunnelKeys" as const, label: "Tunnel Keys", icon: KeyRound },
         ]
       : []),
     { key: "settings" as const, label: "Settings", icon: Settings },

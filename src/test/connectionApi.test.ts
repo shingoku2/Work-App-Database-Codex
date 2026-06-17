@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  approveTunnelKeyRequest,
   changePassword,
+  getTunnelKeyRequestStatus,
+  listTunnelKeyRequests,
   login,
   pairServer,
   probeServer,
+  rejectTunnelKeyRequest,
   resetUserPassword,
+  revokeTunnelKeyRequest,
   submitTunnelKeyRequest,
   updateUser,
 } from "@/features/connection/connectionApi";
@@ -88,6 +93,8 @@ describe("connection API", () => {
       public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       status: "pending",
       note: null,
+      status_token: "token-42",
+      fingerprint_sha256: "SHA256:abc",
       created_at: "2026-06-16T10:00:00Z",
     });
 
@@ -102,6 +109,70 @@ describe("connection API", () => {
         label: "alice-workstation",
         public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       },
+    });
+  });
+
+  it("lists and manages tunnel key requests with camelCase args", async () => {
+    mockedCommand.mockResolvedValueOnce([]).mockResolvedValueOnce({
+      id: 7,
+      label: "bob-laptop",
+      public_key: "ssh-ed25519 AAAATEST bob",
+      status: "approved",
+      note: "verified",
+      status_token: "token-7",
+      fingerprint_sha256: "SHA256:def",
+      created_at: "2026-06-16T10:00:00Z",
+    });
+    await listTunnelKeyRequests();
+    await approveTunnelKeyRequest(7, { note: "verified in person" });
+    expect(mockedCommand).toHaveBeenNthCalledWith(1, "list_tunnel_key_requests");
+    expect(mockedCommand).toHaveBeenNthCalledWith(2, "approve_tunnel_key_request", {
+      id: 7,
+      input: { note: "verified in person" },
+    });
+  });
+
+  it("rejects and revokes tunnel key requests", async () => {
+    mockedCommand.mockResolvedValue({
+      id: 9,
+      label: "old-laptop",
+      public_key: "ssh-ed25519 AAAATEST old",
+      status: "revoked",
+      note: "retired",
+      status_token: "token-9",
+      fingerprint_sha256: null,
+      created_at: "2026-06-16T10:00:00Z",
+    });
+    await rejectTunnelKeyRequest(9, { note: "unknown device" });
+    await revokeTunnelKeyRequest(9, { note: "retired" });
+    expect(mockedCommand).toHaveBeenNthCalledWith(1, "reject_tunnel_key_request", {
+      id: 9,
+      input: { note: "unknown device" },
+    });
+    expect(mockedCommand).toHaveBeenNthCalledWith(2, "revoke_tunnel_key_request", {
+      id: 9,
+      input: { note: "retired" },
+    });
+  });
+
+  it("polls tunnel key request status before pairing", async () => {
+    mockedCommand.mockResolvedValue({
+      id: 42,
+      status: "approved",
+      note: null,
+      client_config: {
+        ssh_destination: "antminer-fleet-client-tunnel@10.0.0.5",
+        ssh_port: 22,
+        local_port: 8443,
+        remote_host: "127.0.0.1",
+        remote_port: 8443,
+      },
+    });
+    await getTunnelKeyRequestStatus("https://fleet.example:8443", 42, "token-42");
+    expect(mockedCommand).toHaveBeenCalledWith("get_tunnel_key_request_status", {
+      serverUrl: "https://fleet.example:8443",
+      id: 42,
+      token: "token-42",
     });
   });
 });

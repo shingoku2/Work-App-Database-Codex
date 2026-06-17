@@ -8,6 +8,7 @@ import { ConnectionGate } from "@/features/connection/ConnectionGate";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { AuditLogView } from "@/features/audit/AuditLogView";
 import { SitesView } from "@/features/sites/SitesView";
+import { TunnelKeyRequestsPanel } from "@/features/settings/TunnelKeyRequestsView";
 import type { User } from "@/types/db";
 
 export function App() {
@@ -29,6 +30,7 @@ function AuthenticatedApp({ user, serverUrl }: { user: User; serverUrl: string }
       {view === "accounts" && user.role === "admin" && <AccountsView />}
       {view === "sites" && user.role === "admin" && <SitesView />}
       {view === "audit" && user.role === "admin" && <AuditLogView />}
+      {view === "tunnelKeys" && user.role === "admin" && <TunnelKeyRequestsPanel />}
       {view === "settings" && <SettingsView user={user} serverUrl={serverUrl} />}
     </AppShell>
   );

@@ -229,11 +229,37 @@ export interface TunnelKeyRequest {
   id: number;
   label: string;
   public_key: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "revoked";
   note: string | null;
+  status_token: string;
+  fingerprint_sha256: string | null;
   created_at: string;
 }
 
 export interface ApproveTunnelKeyRequest {
   note: string | null;
+}
+
+export interface TunnelClientConfig {
+  ssh_destination: string;
+  ssh_port: number;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+}
+
+export interface TunnelKeyRequestStatus {
+  id: number;
+  status: "pending" | "approved" | "rejected" | "revoked";
+  note: string | null;
+  client_config: TunnelClientConfig | null;
+}
+
+export interface TunnelKeyOnboardingState {
+  request_id: number | null;
+  status_token: string | null;
+  label: string;
+  public_key: string;
+  server_url: string;
+  identity_file: string;
 }

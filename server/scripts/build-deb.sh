@@ -12,6 +12,7 @@ install -d "$STAGE/DEBIAN" "$STAGE/usr/bin" "$STAGE/usr/lib/antminer-fleet-serve
 install -m 0755 "$ROOT/target/release/antminer-fleet-server" "$STAGE/usr/bin/antminer-fleet-server"
 install -m 0755 "$ROOT/server/scripts/run-reverse-tunnel.sh" "$STAGE/usr/lib/antminer-fleet-server/run-reverse-tunnel.sh"
 install -m 0755 "$ROOT/server/scripts/authorize-client-tunnel-key.sh" "$STAGE/usr/lib/antminer-fleet-server/authorize-client-tunnel-key.sh"
+install -m 0755 "$ROOT/server/scripts/revoke-client-tunnel-key.sh" "$STAGE/usr/lib/antminer-fleet-server/revoke-client-tunnel-key.sh"
 install -m 0644 "$ROOT/server/packaging/antminer-fleet-server.service" "$STAGE/lib/systemd/system/antminer-fleet-server.service"
 install -m 0644 "$ROOT/server/packaging/antminer-fleet-tunnel.service" "$STAGE/lib/systemd/system/antminer-fleet-tunnel.service"
 install -m 0644 "$ROOT/server/config/server.example.toml" "$STAGE/usr/share/doc/antminer-fleet-server/server.example.toml"

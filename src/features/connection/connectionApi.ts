@@ -1,5 +1,5 @@
 import { command } from "@/lib/tauri";
-import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelConfigInput, TunnelKeyInfo, TunnelKeyRequest, TunnelStatus, User, UserRole } from "@/types/db";
+import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelClientConfig, TunnelConfigInput, TunnelKeyInfo, TunnelKeyOnboardingState, TunnelKeyRequest, TunnelKeyRequestStatus, TunnelStatus, User, UserRole } from "@/types/db";
 
 export function getConnectionState(): Promise<ConnectionState> {
   return command<ConnectionState>("get_connection_state");
@@ -104,6 +104,51 @@ export function approveTunnelKeyRequest(
   return command<TunnelKeyRequest>("approve_tunnel_key_request", { id, input });
 }
 
-export function rejectTunnelKeyRequest(id: number): Promise<void> {
-  return command<void>("reject_tunnel_key_request", { id });
+export function rejectTunnelKeyRequest(
+  id: number,
+  input: ApproveTunnelKeyRequest,
+): Promise<TunnelKeyRequest> {
+  return command<TunnelKeyRequest>("reject_tunnel_key_request", { id, input });
+}
+
+export function revokeTunnelKeyRequest(
+  id: number,
+  input: ApproveTunnelKeyRequest,
+): Promise<TunnelKeyRequest> {
+  return command<TunnelKeyRequest>("revoke_tunnel_key_request", { id, input });
+}
+
+export function getTunnelKeyRequestStatus(
+  serverUrl: string,
+  id: number,
+  token: string,
+): Promise<TunnelKeyRequestStatus> {
+  return command<TunnelKeyRequestStatus>("get_tunnel_key_request_status", {
+    serverUrl,
+    id,
+    token,
+  });
+}
+
+export function saveTunnelKeyOnboarding(state: TunnelKeyOnboardingState): Promise<void> {
+  return command<void>("save_tunnel_key_onboarding", { state });
+}
+
+export function loadTunnelKeyOnboarding(): Promise<TunnelKeyOnboardingState | null> {
+  return command<TunnelKeyOnboardingState | null>("load_tunnel_key_onboarding");
+}
+
+export function clearTunnelKeyOnboarding(): Promise<void> {
+  return command<void>("clear_tunnel_key_onboarding");
+}
+
+export function formatOnboardingBundle(label: string, publicKey: string): string {
+  return [
+    "Antminer Fleet SSH tunnel key request",
+    `Label: ${label}`,
+    "Public key:",
+    publicKey,
+    "",
+    "Ask an admin to approve this in Fleet Manager → Tunnel Keys.",
+  ].join("\n");
 }

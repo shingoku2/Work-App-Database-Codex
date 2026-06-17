@@ -5,6 +5,7 @@ use fleet_shared::{
     PairingInfo, Part, ResetPasswordRequest, Site, UpdateMiner, UpdateSite, UpdateUserRequest,
     UpdateWebhook, User, Webhook, WebhookDelivery,
     ApproveTunnelKeyRequest, SubmitTunnelKeyRequest, TunnelKeyRequest,
+    TunnelKeyRequestStatus,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
@@ -762,8 +763,59 @@ pub async fn approve_tunnel_key_request(
 pub async fn reject_tunnel_key_request(
     state: State<'_, ClientState>,
     id: i64,
-) -> Result<(), String> {
+    input: ApproveTunnelKeyRequest,
+) -> Result<TunnelKeyRequest, String> {
     state
-        .delete(&format!("/api/v1/tunnel-key-requests/{id}"))
+        .post(
+            &format!("/api/v1/tunnel-key-requests/{id}/reject"),
+            &input,
+        )
         .await
+}
+
+#[tauri::command]
+pub async fn revoke_tunnel_key_request(
+    state: State<'_, ClientState>,
+    id: i64,
+    input: ApproveTunnelKeyRequest,
+) -> Result<TunnelKeyRequest, String> {
+    state
+        .post(
+            &format!("/api/v1/tunnel-key-requests/{id}/revoke"),
+            &input,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn get_tunnel_key_request_status(
+    server_url: String,
+    id: i64,
+    token: String,
+) -> Result<TunnelKeyRequestStatus, String> {
+    ClientState::get_no_auth_to_url(
+        &server_url,
+        &format!("/api/v1/tunnel-key-requests/{id}/status?token={token}"),
+    )
+    .await
+}
+
+#[tauri::command]
+pub fn save_tunnel_key_onboarding(
+    app: AppHandle,
+    state: crate::tunnel_onboarding::TunnelKeyOnboardingState,
+) -> Result<(), String> {
+    crate::tunnel_onboarding::save_tunnel_key_onboarding(&app, &state)
+}
+
+#[tauri::command]
+pub fn load_tunnel_key_onboarding(
+    app: AppHandle,
+) -> Result<Option<crate::tunnel_onboarding::TunnelKeyOnboardingState>, String> {
+    crate::tunnel_onboarding::load_tunnel_key_onboarding(&app)
+}
+
+#[tauri::command]
+pub fn clear_tunnel_key_onboarding(app: AppHandle) -> Result<(), String> {
+    crate::tunnel_onboarding::clear_tunnel_key_onboarding(&app)
 }

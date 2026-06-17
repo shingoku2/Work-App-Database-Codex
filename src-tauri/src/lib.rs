@@ -1,5 +1,6 @@
 mod client;
 mod commands;
+mod tunnel_onboarding;
 
 use tauri::Manager;
 
@@ -57,6 +58,11 @@ pub fn run() {
             commands::list_tunnel_key_requests,
             commands::approve_tunnel_key_request,
             commands::reject_tunnel_key_request,
+            commands::revoke_tunnel_key_request,
+            commands::get_tunnel_key_request_status,
+            commands::save_tunnel_key_onboarding,
+            commands::load_tunnel_key_onboarding,
+            commands::clear_tunnel_key_onboarding,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");

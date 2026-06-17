@@ -4,11 +4,16 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
 import {
+  clearTunnelKeyOnboarding,
   generateTunnelKey,
   getConnectionState,
   getTunnelStatus,
+  getTunnelKeyRequestStatus,
+  loadTunnelKeyOnboarding,
   login,
+  probeServer,
   saveTunnelConfig,
+  saveTunnelKeyOnboarding,
   submitTunnelKeyRequest,
 } from "@/features/connection/connectionApi";
 
@@ -23,6 +28,11 @@ vi.mock("@/features/connection/connectionApi", () => ({
   startTunnelConnection: vi.fn(),
   unpairServer: vi.fn(),
   submitTunnelKeyRequest: vi.fn(),
+  getTunnelKeyRequestStatus: vi.fn(),
+  saveTunnelKeyOnboarding: vi.fn(),
+  loadTunnelKeyOnboarding: vi.fn(),
+  clearTunnelKeyOnboarding: vi.fn(),
+  formatOnboardingBundle: vi.fn(),
 }));
 
 const mockedState = vi.mocked(getConnectionState);
@@ -31,6 +41,10 @@ const mockedGenerateTunnelKey = vi.mocked(generateTunnelKey);
 const mockedSaveTunnelConfig = vi.mocked(saveTunnelConfig);
 const mockedLogin = vi.mocked(login);
 const mockedSubmitTunnelKeyRequest = vi.mocked(submitTunnelKeyRequest);
+const mockedProbeServer = vi.mocked(probeServer);
+const mockedLoadTunnelKeyOnboarding = vi.mocked(loadTunnelKeyOnboarding);
+const mockedSaveTunnelKeyOnboarding = vi.mocked(saveTunnelKeyOnboarding);
+const mockedGetTunnelKeyRequestStatus = vi.mocked(getTunnelKeyRequestStatus);
 
 beforeEach(() => {
   mockedState.mockReset();
@@ -39,6 +53,18 @@ beforeEach(() => {
   mockedSaveTunnelConfig.mockReset();
   mockedSubmitTunnelKeyRequest.mockReset();
   mockedLogin.mockReset();
+  mockedProbeServer.mockReset();
+  mockedLoadTunnelKeyOnboarding.mockReset();
+  mockedGetTunnelKeyRequestStatus.mockReset();
+  mockedGetTunnelKeyRequestStatus.mockResolvedValue({
+    id: 42,
+    status: "pending",
+    note: null,
+    client_config: null,
+  });
+  vi.mocked(clearTunnelKeyOnboarding).mockReset();
+  mockedLoadTunnelKeyOnboarding.mockResolvedValue(null);
+  mockedSaveTunnelKeyOnboarding.mockResolvedValue(undefined);
   mockedTunnel.mockResolvedValue({
     supported: true,
     configured: true,
@@ -89,12 +115,19 @@ describe("ConnectionGate", () => {
       public_key_file: "C:/Users/example/.ssh/antminer_fleet_tunnel.pub",
       public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
     });
+    mockedProbeServer.mockResolvedValue({
+      server: { product: "Fleet Server", version: "0.3.0", api_version: "v1" },
+      certificate_pem: "CERT",
+      fingerprint_sha256: "AA:BB",
+    });
     mockedSubmitTunnelKeyRequest.mockResolvedValue({
       id: 42,
       label: "alice-workstation",
       public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       status: "pending",
       note: null,
+      status_token: "token-42",
+      fingerprint_sha256: "SHA256:abc",
       created_at: "2026-06-16T10:00:00Z",
     });
     mockedSaveTunnelConfig.mockResolvedValue({
@@ -115,21 +148,21 @@ describe("ConnectionGate", () => {
     expect(await screen.findByRole("heading", { name: "Set up SSH tunnel" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Connect to Fleet Server" })).not.toBeInTheDocument();
 
-    // Enter the server URL and label first (both required before generating key)
     const serverUrlInput = screen.getByLabelText("Server URL");
     await actor.clear(serverUrlInput);
     await actor.type(serverUrlInput, "https://fleet.example:8443");
     await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
 
-    // Generate key is now enabled
     await actor.click(screen.getByRole("button", { name: "Generate This Computer's SSH Key" }));
     expect(await screen.findByDisplayValue("ssh-ed25519 AAAATEST antminer-fleet-tunnel")).toBeInTheDocument();
     expect(screen.getByDisplayValue("C:/Users/example/.ssh/antminer_fleet_tunnel")).toBeInTheDocument();
+    expect(screen.getByText(/private key stays on this computer/i)).toBeInTheDocument();
+    expect(screen.getByText(/restricted tunnel account/i)).toBeInTheDocument();
 
-    // Submit key for admin approval
+    await waitFor(() => expect(mockedProbeServer).toHaveBeenCalled());
+
     await actor.click(screen.getByRole("button", { name: "Submit Key for Admin Approval" }));
 
-    // Wait for mutation to be called
     await waitFor(() =>
       expect(mockedSubmitTunnelKeyRequest).toHaveBeenCalledWith("https://fleet.example:8443", {
         label: "alice-workstation",

@@ -85,6 +85,17 @@ impl ClientState {
     /// `POST /api/v1/tunnel-key-requests`). The TLS certificate is NOT pinned
     /// here — the user is expected to compare the server fingerprint when
     /// they pair, which is when the cert gets pinned.
+    pub async fn get_no_auth_to_url<T: DeserializeOwned>(
+        url: &str,
+        path: &str,
+    ) -> Result<T, String> {
+        let base_url = normalize_url(url)?;
+        let response = one_shot_request::<()>(Method::GET, &base_url, path, None)
+            .await
+            .map_err(network_error)?;
+        parse_response(response).await
+    }
+
     pub async fn post_no_auth_to_url<B: Serialize + ?Sized, T: DeserializeOwned>(
         url: &str,
         path: &str,
