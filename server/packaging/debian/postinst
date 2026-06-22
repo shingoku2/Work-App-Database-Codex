@@ -18,10 +18,15 @@ fi
 install -d -m 0750 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet
 install -d -m 0700 -o antminer-fleet -g antminer-fleet /var/lib/antminer-fleet/.ssh
 install -d -m 0750 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /var/lib/antminer-fleet-client-tunnel
-install -d -m 0750 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /etc/antminer-fleet/client-tunnel
+install -d -m 2770 -o root -g antminer-fleet /etc/antminer-fleet/client-tunnel
 if [ ! -f /etc/antminer-fleet/client-tunnel/authorized_keys ]; then
-  install -m 0640 -o antminer-fleet-client-tunnel -g antminer-fleet-client-tunnel /dev/null /etc/antminer-fleet/client-tunnel/authorized_keys
+  install -m 0660 -o root -g antminer-fleet /dev/null /etc/antminer-fleet/client-tunnel/authorized_keys
+else
+  chown root:antminer-fleet /etc/antminer-fleet/client-tunnel/authorized_keys
+  chmod 0660 /etc/antminer-fleet/client-tunnel/authorized_keys
 fi
+chown root:antminer-fleet /etc/antminer-fleet/client-tunnel
+chmod 2770 /etc/antminer-fleet/client-tunnel
 
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet
 install -d -m 2750 -o root -g antminer-fleet /etc/antminer-fleet/tls

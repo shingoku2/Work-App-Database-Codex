@@ -236,6 +236,16 @@ export interface TunnelKeyRequest {
   created_at: string;
 }
 
+export interface TunnelKeyRequestAdmin {
+  id: number;
+  label: string;
+  public_key: string;
+  status: "pending" | "approved" | "rejected" | "revoked";
+  note: string | null;
+  fingerprint_sha256: string | null;
+  created_at: string;
+}
+
 export interface ApproveTunnelKeyRequest {
   note: string | null;
 }

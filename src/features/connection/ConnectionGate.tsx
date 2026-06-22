@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode, useEffect } from "react";
+import { useState, type ReactNode, useEffect, useCallback } from "react";
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Panel";
 import { initialServerUrl } from "@/config/server";
 import type { PairingInfo, TunnelKeyInfo, TunnelKeyRequest, TunnelStatus, User } from "@/types/db";
@@ -184,15 +184,6 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
     },
   });
 
-  const applyClientConfig = (config: TunnelClientConfig) => {
-    setSshDestination(config.ssh_destination);
-    setSshPort(String(config.ssh_port));
-    setLocalPort(String(config.local_port));
-    setRemoteHost(config.remote_host);
-    setRemotePort(String(config.remote_port));
-    setApprovedReady(true);
-  };
-
   const startExisting = useMutation({ mutationFn: startTunnelConnection, onSuccess: onComplete });
   const save = useMutation({
     mutationFn: () =>
@@ -220,14 +211,25 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
     setCopyMessage("Onboarding bundle copied to clipboard.");
   };
 
-  const handleStartOver = async () => {
+  const handleStartOver = useCallback(async () => {
     setPendingRequest(null);
     setStatusToken(null);
     setApprovedReady(false);
     setKey(null);
     setCopyMessage(null);
     await clearTunnelKeyOnboarding();
-  };
+  }, []);
+
+  const handleApproved = useCallback((config: TunnelClientConfig) => {
+    setPendingRequest(null);
+    setStatusToken(null);
+    setSshDestination(config.ssh_destination);
+    setSshPort(String(config.ssh_port));
+    setLocalPort(String(config.local_port));
+    setRemoteHost(config.remote_host);
+    setRemotePort(String(config.remote_port));
+    setApprovedReady(true);
+  }, []);
 
   const canSubmit =
     Boolean(key && label.trim() && serverUrl.trim()) &&
@@ -264,12 +266,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             serverUrl={serverUrl.trim()}
             request={pendingRequest}
             statusToken={statusToken}
-            onApproved={(config) => {
-              setPendingRequest(null);
-              setStatusToken(null);
-              applyClientConfig(config);
-            }}
-            onRejected={handleStartOver}
+            onApproved={handleApproved}
             onCancel={handleStartOver}
           />
         ) : (
@@ -336,7 +333,10 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             <hr className="border-white/10" />
             <p className="text-xs text-slate-500">
               After an admin approves your public key, enter the Tunnel SSH Destination they provide. Use
-              the restricted tunnel account they give you, not a personal SSH login.
+              the restricted tunnel account they give you, not a personal SSH login. If you used{" "}
+              <strong>Copy Onboarding Bundle</strong> without submitting, there is no automatic approval
+              polling — wait for the admin, then enter the tunnel destination manually below or submit
+              later when the server is reachable.
             </p>
             {approvedReady && (
               <p className="text-xs text-emerald-300">
@@ -376,34 +376,36 @@ function WaitingForApproval({
   request,
   statusToken,
   onApproved,
-  onRejected,
   onCancel,
 }: {
   serverUrl: string;
   request: TunnelKeyRequest;
   statusToken: string;
   onApproved: (config: TunnelClientConfig) => void;
-  onRejected: () => void;
   onCancel: () => void;
 }) {
+  const [terminalStatus, setTerminalStatus] = useState<"rejected" | "revoked" | null>(null);
+
   const statusQuery = useQuery({
     queryKey: ["tunnelKeyStatus", serverUrl, request.id, statusToken],
     queryFn: () => getTunnelKeyRequestStatus(serverUrl, request.id, statusToken),
-    refetchInterval: 10_000,
+    refetchInterval: terminalStatus ? false : 10_000,
     retry: false,
   });
 
   useEffect(() => {
     const current = statusQuery.data;
-    if (!current) {
+    if (!current || terminalStatus) {
       return;
     }
     if (current.status === "approved" && current.client_config) {
       onApproved(current.client_config);
     } else if (current.status === "rejected" || current.status === "revoked") {
-      onRejected();
+      setTerminalStatus(current.status);
     }
-  }, [statusQuery.data, onApproved, onRejected]);
+  }, [statusQuery.data, onApproved, terminalStatus]);
+
+  const rejectionNote = statusQuery.data?.note;
 
   return (
     <div className="space-y-4 text-sm text-slate-300">
@@ -413,11 +415,16 @@ function WaitingForApproval({
         Ask an admin to approve it in Fleet Manager → Tunnel Keys. This screen checks for approval
         every 10 seconds.
       </p>
-      {statusQuery.data?.status === "rejected" || statusQuery.data?.status === "revoked" ? (
-        <p className="text-amber-200">
-          This request was {statusQuery.data.status}.
-          {statusQuery.data.note ? ` Note: ${statusQuery.data.note}` : ""}
-        </p>
+      {terminalStatus ? (
+        <div className="rounded-md border border-amber-400/30 bg-amber-400/10 p-4 text-amber-100">
+          <p>
+            This request was {terminalStatus}.
+            {rejectionNote ? ` Note: ${rejectionNote}` : ""}
+          </p>
+          <button className={`${secondaryButtonClass} mt-3`} onClick={() => void onCancel()}>
+            Start over
+          </button>
+        </div>
       ) : null}
       <div className="rounded-md border border-white/10 bg-black/20 p-4">
         <div className="mb-2 text-xs uppercase text-slate-500">
@@ -430,9 +437,11 @@ function WaitingForApproval({
         />
       </div>
       {statusQuery.error && <ErrorText error={statusQuery.error} />}
-      <button className="text-xs text-slate-400 underline" onClick={onCancel}>
-        Start over
-      </button>
+      {!terminalStatus && (
+        <button className="text-xs text-slate-400 underline" onClick={() => void onCancel()}>
+          Start over
+        </button>
+      )}
     </div>
   );
 }

@@ -2,8 +2,8 @@
 set -eu
 
 AUTHORIZED_KEYS=${ANTMINER_FLEET_CLIENT_TUNNEL_AUTHORIZED_KEYS:-/etc/antminer-fleet/client-tunnel/authorized_keys}
-OWNER_USER=${ANTMINER_FLEET_CLIENT_TUNNEL_USER:-antminer-fleet-client-tunnel}
-OWNER_GROUP=${ANTMINER_FLEET_CLIENT_TUNNEL_GROUP:-antminer-fleet-client-tunnel}
+OWNER_USER=${ANTMINER_FLEET_CLIENT_TUNNEL_USER:-root}
+OWNER_GROUP=${ANTMINER_FLEET_CLIENT_TUNNEL_GROUP:-antminer-fleet}
 
 usage() {
   cat >&2 <<'USAGE'
@@ -12,6 +12,10 @@ Usage:
 
 Removes the restricted client SSH public key entry for LABEL from the configured
 authorized_keys file. Keys are matched by the antminer-fleet-client:LABEL marker.
+
+Exit codes:
+  0  key removed
+  2  label not found (already absent)
 USAGE
 }
 
@@ -50,18 +54,18 @@ esac
 
 if [ ! -f "$AUTHORIZED_KEYS" ]; then
   echo "authorized_keys file does not exist: $AUTHORIZED_KEYS" >&2
-  exit 0
+  exit 2
 fi
 
 MARKER="antminer-fleet-client:$LABEL"
 TMP_KEYS=$(mktemp)
 trap 'rm -f "$TMP_KEYS"' EXIT HUP INT TERM
 
-if ! grep -F "$MARKER" "$AUTHORIZED_KEYS" >"$TMP_KEYS" 2>/dev/null; then
+if ! grep -F "$MARKER" "$AUTHORIZED_KEYS" >/dev/null 2>&1; then
   echo "No authorized key found for label: $LABEL" >&2
-  exit 0
+  exit 2
 fi
 
 grep -Fv "$MARKER" "$AUTHORIZED_KEYS" >"$TMP_KEYS" || true
-install -m 0640 -o "$OWNER_USER" -g "$OWNER_GROUP" "$TMP_KEYS" "$AUTHORIZED_KEYS"
+install -m 0660 -o "$OWNER_USER" -g "$OWNER_GROUP" "$TMP_KEYS" "$AUTHORIZED_KEYS"
 echo "Revoked tunnel key for label: $LABEL"

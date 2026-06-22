@@ -2,8 +2,8 @@
 set -eu
 
 AUTHORIZED_KEYS=${ANTMINER_FLEET_CLIENT_TUNNEL_AUTHORIZED_KEYS:-/etc/antminer-fleet/client-tunnel/authorized_keys}
-OWNER_USER=${ANTMINER_FLEET_CLIENT_TUNNEL_USER:-antminer-fleet-client-tunnel}
-OWNER_GROUP=${ANTMINER_FLEET_CLIENT_TUNNEL_GROUP:-antminer-fleet-client-tunnel}
+OWNER_USER=${ANTMINER_FLEET_CLIENT_TUNNEL_USER:-root}
+OWNER_GROUP=${ANTMINER_FLEET_CLIENT_TUNNEL_GROUP:-antminer-fleet}
 PERMIT_OPEN=${ANTMINER_FLEET_CLIENT_TUNNEL_PERMIT_OPEN:-127.0.0.1:8443}
 
 usage() {
@@ -18,8 +18,8 @@ file with options that allow only TCP forwarding to the Fleet endpoint.
 
 Environment overrides:
   ANTMINER_FLEET_CLIENT_TUNNEL_AUTHORIZED_KEYS  default /etc/antminer-fleet/client-tunnel/authorized_keys
-  ANTMINER_FLEET_CLIENT_TUNNEL_USER             default antminer-fleet-client-tunnel
-  ANTMINER_FLEET_CLIENT_TUNNEL_GROUP            default antminer-fleet-client-tunnel
+  ANTMINER_FLEET_CLIENT_TUNNEL_USER             default root
+  ANTMINER_FLEET_CLIENT_TUNNEL_GROUP            default antminer-fleet
   ANTMINER_FLEET_CLIENT_TUNNEL_PERMIT_OPEN      default 127.0.0.1:8443
 USAGE
 }
@@ -119,10 +119,10 @@ else
 fi
 
 AUTHORIZED_DIR=$(dirname -- "$AUTHORIZED_KEYS")
-install -d -m 0750 -o "$OWNER_USER" -g "$OWNER_GROUP" "$AUTHORIZED_DIR"
+install -d -m 2770 -o "$OWNER_USER" -g "$OWNER_GROUP" "$AUTHORIZED_DIR"
 touch "$AUTHORIZED_KEYS"
 chown "$OWNER_USER:$OWNER_GROUP" "$AUTHORIZED_KEYS"
-chmod 0640 "$AUTHORIZED_KEYS"
+chmod 0660 "$AUTHORIZED_KEYS"
 
 OPTIONS="restrict,port-forwarding,permitopen=\"$PERMIT_OPEN\",no-agent-forwarding,no-X11-forwarding,no-pty"
 MARKER="antminer-fleet-client:$LABEL"
@@ -133,7 +133,7 @@ if [ -s "$AUTHORIZED_KEYS" ]; then
   grep -v " $MARKER$" "$AUTHORIZED_KEYS" >"$TMP_KEYS" || true
 fi
 printf '%s\n' "$ENTRY" >>"$TMP_KEYS"
-install -m 0640 -o "$OWNER_USER" -g "$OWNER_GROUP" "$TMP_KEYS" "$AUTHORIZED_KEYS"
+install -m 0660 -o "$OWNER_USER" -g "$OWNER_GROUP" "$TMP_KEYS" "$AUTHORIZED_KEYS"
 
 printf 'Authorized client tunnel key: %s\n' "$LABEL"
 printf 'Authorized keys file: %s\n' "$AUTHORIZED_KEYS"

@@ -16,8 +16,9 @@ use fleet_shared::{
     ChangePasswordRequest, CountByStatus, CreateMiner, CreatePart, CreateSite, CreateUserRequest,
     CreateWebhook, DashboardSummary, LoginRequest, LoginResponse, Miner, MinerImportResult,
     PairingInfo, Part, ResetPasswordRequest, ServerInfo, Site, SiteQuery, SubmitTunnelKeyRequest,
-    TunnelClientConfig, TunnelKeyRequest, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
-    UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook, WebhookDelivery, API_VERSION,
+    TunnelClientConfig, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus,
+    UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook,
+    WebhookDelivery, API_VERSION,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -40,6 +41,7 @@ struct AppState {
     session_days: i64,
     login_limiter: Arc<Mutex<LoginLimiter>>,
     status_limiter: Arc<Mutex<StatusLimiter>>,
+    submit_limiter: Arc<Mutex<StatusLimiter>>,
     dummy_password_hash: String,
     pairing: PairingInfo,
     webhook_client: reqwest::Client,
@@ -52,6 +54,8 @@ const LOGIN_SOURCE_LIMIT: usize = 30;
 const LOGIN_LIMITER_CAPACITY: usize = 10_000;
 const STATUS_WINDOW: StdDuration = StdDuration::from_secs(60);
 const STATUS_SOURCE_LIMIT: usize = 120;
+const SUBMIT_SOURCE_LIMIT: usize = 30;
+const MAX_PENDING_TUNNEL_KEY_REQUESTS: i64 = 50;
 
 #[derive(Default)]
 struct LoginLimiter {
@@ -114,13 +118,21 @@ struct StatusLimiter {
 }
 
 impl StatusLimiter {
-    fn allow(&mut self, source: IpAddr, now: Instant) -> bool {
+    fn allow(&mut self, source: IpAddr, now: Instant, limit: usize) -> bool {
         self.prune(now);
-        if self.source_attempts.get(&source).map_or(0, Vec::len) >= STATUS_SOURCE_LIMIT {
+        if self.source_attempts.get(&source).map_or(0, Vec::len) >= limit {
             return false;
         }
         self.source_attempts.entry(source).or_default().push(now);
         true
+    }
+
+    fn allow_status(&mut self, source: IpAddr, now: Instant) -> bool {
+        self.allow(source, now, STATUS_SOURCE_LIMIT)
+    }
+
+    fn allow_submit(&mut self, source: IpAddr, now: Instant) -> bool {
+        self.allow(source, now, SUBMIT_SOURCE_LIMIT)
     }
 
     fn prune(&mut self, now: Instant) {
@@ -163,6 +175,17 @@ mod tests {
             limiter.account_attempts.len() + limiter.source_attempts.len()
                 <= LOGIN_LIMITER_CAPACITY
         );
+    }
+
+    #[test]
+    fn status_limiter_enforces_submit_budget() {
+        let now = Instant::now();
+        let source = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 9));
+        let mut limiter = StatusLimiter::default();
+        for _ in 0..SUBMIT_SOURCE_LIMIT {
+            assert!(limiter.allow_submit(source, now));
+        }
+        assert!(!limiter.allow_submit(source, now));
     }
 }
 
@@ -293,6 +316,7 @@ pub async fn serve(config: ServerConfig, pool: PgPool) -> Result<(), Box<dyn std
         session_days: config.session_days,
         login_limiter: Arc::new(Mutex::new(LoginLimiter::default())),
         status_limiter: Arc::new(Mutex::new(StatusLimiter::default())),
+        submit_limiter: Arc::new(Mutex::new(StatusLimiter::default())),
         dummy_password_hash: hash_password("dummy-password-never-used")?,
         pairing: PairingInfo {
             server: server_info(),
@@ -1768,8 +1792,20 @@ async fn delete_site(
 
 async fn submit_tunnel_key_request(
     State(state): State<AppState>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(input): Json<SubmitTunnelKeyRequest>,
 ) -> AppResult<(StatusCode, Json<TunnelKeyRequest>)> {
+    {
+        let mut limiter = state.submit_limiter.lock().await;
+        if !limiter.allow_submit(remote.ip(), Instant::now()) {
+            return Err(AppError {
+                status: StatusCode::TOO_MANY_REQUESTS,
+                code: "rate_limited",
+                message: "too many tunnel key submissions; try again shortly".into(),
+            });
+        }
+    }
+
     let label = input.label.trim().to_string();
     let public_key = input.public_key.trim().to_string();
 
@@ -1808,6 +1844,35 @@ async fn submit_tunnel_key_request(
         return Err(AppError::bad_request("unsupported public key type"));
     }
 
+    let existing = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM tunnel_key_requests WHERE status = 'pending' AND public_key = $1 LIMIT 1",
+    )
+    .bind(&public_key)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+    if existing.is_some() {
+        return Err(AppError {
+            status: StatusCode::CONFLICT,
+            code: "duplicate_pending",
+            message: "A pending request for this public key already exists".into(),
+        });
+    }
+
+    let pending_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*)::bigint FROM tunnel_key_requests WHERE status = 'pending'",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(AppError::database)?;
+    if pending_count >= MAX_PENDING_TUNNEL_KEY_REQUESTS {
+        return Err(AppError {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            code: "pending_limit",
+            message: "too many pending tunnel key requests; try again later".into(),
+        });
+    }
+
     let status_token = Uuid::new_v4().to_string();
     let row = sqlx::query(
         "INSERT INTO tunnel_key_requests (label, public_key, status_token)
@@ -1827,17 +1892,21 @@ async fn submit_tunnel_key_request(
 async fn list_tunnel_key_requests(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> AppResult<Json<Vec<TunnelKeyRequest>>> {
+) -> AppResult<Json<Vec<TunnelKeyRequestAdmin>>> {
     require_admin(&state, &headers).await?;
     let rows = sqlx::query(
-        "SELECT id, label, public_key, status, note, status_token, created_at
+        "SELECT id, label, public_key, status, note, created_at
          FROM tunnel_key_requests
          ORDER BY created_at DESC",
     )
     .fetch_all(&state.pool)
     .await
     .map_err(AppError::database)?;
-    Ok(Json(rows.iter().map(tunnel_key_request_from_row).collect()))
+    Ok(Json(
+        rows.iter()
+            .map(tunnel_key_request_admin_from_row)
+            .collect(),
+    ))
 }
 
 async fn approve_tunnel_key_request(
@@ -1868,30 +1937,16 @@ async fn approve_tunnel_key_request(
     let label: String = row.get("label");
     let public_key: String = row.get("public_key");
 
-    let script_path = tunnel_script_path("authorize-client-tunnel-key.sh")?;
-
-    let output = tokio::process::Command::new(&script_path)
-        .args(["--label", &label, "--public-key", &public_key])
-        .output()
-        .await
-        .map_err(|e| AppError {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            code: "script_failed",
-            message: format!("Could not run key authorization script: {e}"),
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let msg = if stderr.is_empty() { stdout } else { stderr };
-        return Err(AppError {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            code: "script_failed",
-            message: format!("Key authorization script failed: {msg}"),
-        });
+    let outcome = run_tunnel_script(
+        "authorize-client-tunnel-key.sh",
+        &["--label", &label, "--public-key", &public_key],
+    )
+    .await?;
+    if outcome.exit_code != 0 {
+        return Err(script_failure("authorize-client-tunnel-key.sh", &outcome));
     }
 
-    let updated = sqlx::query(
+    let updated = match sqlx::query(
         "UPDATE tunnel_key_requests
          SET status = 'approved', note = $1, updated_at = NOW()
          WHERE id = $2
@@ -1901,7 +1956,47 @@ async fn approve_tunnel_key_request(
     .bind(id)
     .fetch_one(&state.pool)
     .await
-    .map_err(AppError::database)?;
+    {
+        Ok(row) => row,
+        Err(db_err) => {
+            let compensation = run_tunnel_script("revoke-client-tunnel-key.sh", &["--label", &label])
+                .await;
+            let compensation_ok = compensation
+                .as_ref()
+                .map(|outcome| outcome.exit_code == 0 || outcome.exit_code == 2)
+                .unwrap_or(false);
+            let action = if compensation_ok {
+                "tunnel_key.compensation_applied"
+            } else {
+                "tunnel_key.compensation_failed"
+            };
+            audit_log(
+                &state,
+                Some(admin.id),
+                Some(&admin.username),
+                action,
+                Some("tunnel_key_request"),
+                Some(&id.to_string()),
+                None,
+                None,
+                Some(&serde_json::json!({
+                    "label": label,
+                    "operation": "approve_rollback",
+                    "compensation_ok": compensation_ok,
+                    "db_error": db_err.to_string(),
+                })),
+                Some(&remote.ip().to_string()),
+            )
+            .await;
+            return Err(AppError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                code: "approval_not_recorded",
+                message: format!(
+                    "Key was authorized in SSH but approval was not recorded; inspect authorized_keys manually: {db_err}"
+                ),
+            });
+        }
+    };
 
     audit_log(
         &state,
@@ -2003,29 +2098,15 @@ async fn revoke_tunnel_key_request(
     }
 
     let label: String = row.get("label");
-    let script_path = tunnel_script_path("revoke-client-tunnel-key.sh")?;
-    let output = tokio::process::Command::new(&script_path)
-        .args(["--label", &label])
-        .output()
-        .await
-        .map_err(|e| AppError {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            code: "script_failed",
-            message: format!("Could not run key revocation script: {e}"),
-        })?;
+    let public_key: String = row.get("public_key");
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let msg = if stderr.is_empty() { stdout } else { stderr };
-        return Err(AppError {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            code: "script_failed",
-            message: format!("Key revocation script failed: {msg}"),
-        });
+    let outcome = run_tunnel_script("revoke-client-tunnel-key.sh", &["--label", &label]).await?;
+    let ssh_key_already_absent = outcome.exit_code == 2;
+    if outcome.exit_code != 0 && outcome.exit_code != 2 {
+        return Err(script_failure("revoke-client-tunnel-key.sh", &outcome));
     }
 
-    let updated = sqlx::query(
+    let updated = match sqlx::query(
         "UPDATE tunnel_key_requests
          SET status = 'revoked', note = $1, updated_at = NOW()
          WHERE id = $2
@@ -2035,7 +2116,50 @@ async fn revoke_tunnel_key_request(
     .bind(id)
     .fetch_one(&state.pool)
     .await
-    .map_err(AppError::database)?;
+    {
+        Ok(row) => row,
+        Err(db_err) => {
+            let compensation = run_tunnel_script(
+                "authorize-client-tunnel-key.sh",
+                &["--label", &label, "--public-key", &public_key],
+            )
+            .await;
+            let compensation_ok = compensation
+                .as_ref()
+                .map(|outcome| outcome.exit_code == 0)
+                .unwrap_or(false);
+            let action = if compensation_ok {
+                "tunnel_key.compensation_applied"
+            } else {
+                "tunnel_key.compensation_failed"
+            };
+            audit_log(
+                &state,
+                Some(admin.id),
+                Some(&admin.username),
+                action,
+                Some("tunnel_key_request"),
+                Some(&id.to_string()),
+                None,
+                None,
+                Some(&serde_json::json!({
+                    "label": label,
+                    "operation": "revoke_rollback",
+                    "compensation_ok": compensation_ok,
+                    "db_error": db_err.to_string(),
+                })),
+                Some(&remote.ip().to_string()),
+            )
+            .await;
+            return Err(AppError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                code: "revocation_not_recorded",
+                message: format!(
+                    "Key was revoked in SSH but revocation was not recorded; inspect authorized_keys manually: {db_err}"
+                ),
+            });
+        }
+    };
 
     audit_log(
         &state,
@@ -2046,7 +2170,10 @@ async fn revoke_tunnel_key_request(
         Some(&id.to_string()),
         None,
         None,
-        Some(&serde_json::json!({"label": label})),
+        Some(&serde_json::json!({
+            "label": label,
+            "ssh_key_already_absent": ssh_key_already_absent,
+        })),
         Some(&remote.ip().to_string()),
     )
     .await;
@@ -2067,7 +2194,7 @@ async fn get_tunnel_key_request_status(
 ) -> AppResult<Json<TunnelKeyRequestStatus>> {
     {
         let mut limiter = state.status_limiter.lock().await;
-        if !limiter.allow(remote.ip(), Instant::now()) {
+        if !limiter.allow_status(remote.ip(), Instant::now()) {
             return Err(AppError {
                 status: StatusCode::TOO_MANY_REQUESTS,
                 code: "rate_limited",
@@ -2179,6 +2306,40 @@ fn tunnel_script_path(script_name: &str) -> Result<String, AppError> {
     }
 }
 
+struct TunnelScriptOutcome {
+    exit_code: i32,
+    message: String,
+}
+
+async fn run_tunnel_script(
+    script_name: &str,
+    args: &[&str],
+) -> Result<TunnelScriptOutcome, AppError> {
+    let script_path = tunnel_script_path(script_name)?;
+    let output = tokio::process::Command::new(&script_path)
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| AppError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: "script_failed",
+            message: format!("Could not run {script_name}: {e}"),
+        })?;
+    let exit_code = output.status.code().unwrap_or(-1);
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let message = if stderr.is_empty() { stdout } else { stderr };
+    Ok(TunnelScriptOutcome { exit_code, message })
+}
+
+fn script_failure(script_name: &str, outcome: &TunnelScriptOutcome) -> AppError {
+    AppError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        code: "script_failed",
+        message: format!("{script_name} failed: {}", outcome.message),
+    }
+}
+
 fn tunnel_key_request_from_row(row: &sqlx::postgres::PgRow) -> TunnelKeyRequest {
     let public_key: String = row.get("public_key");
     TunnelKeyRequest {
@@ -2188,6 +2349,21 @@ fn tunnel_key_request_from_row(row: &sqlx::postgres::PgRow) -> TunnelKeyRequest 
         status: row.get("status"),
         note: row.get("note"),
         status_token: row.get("status_token"),
+        fingerprint_sha256: public_key_fingerprint_sha256(&public_key),
+        created_at: row
+            .get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+            .to_rfc3339(),
+    }
+}
+
+fn tunnel_key_request_admin_from_row(row: &sqlx::postgres::PgRow) -> TunnelKeyRequestAdmin {
+    let public_key: String = row.get("public_key");
+    TunnelKeyRequestAdmin {
+        id: row.get("id"),
+        label: row.get("label"),
+        public_key: public_key.clone(),
+        status: row.get("status"),
+        note: row.get("note"),
         fingerprint_sha256: public_key_fingerprint_sha256(&public_key),
         created_at: row
             .get::<chrono::DateTime<chrono::Utc>, _>("created_at")

@@ -209,7 +209,9 @@ sudo systemctl reload ssh
 
 Add `[tunnel_client]` to `/etc/antminer-fleet/server.toml` with the SSH destination clients should use after approval. `validate-config` rejects `CHANGE_ME` placeholders.
 
-When the app displays a user's public key, authorize it with a stable label:
+**Upgrade note:** existing installs must add a real `[tunnel_client]` section before `validate-config` succeeds. Upgrading the Debian package re-applies `authorized_keys` permissions (`root:antminer-fleet`, mode `0660`) via `postinst` so in-app Approve/Revoke works without `sudo`.
+
+When the app displays a user's public key, authorize it with a stable label. On packaged installs, admins can use **Tunnel Keys → Approve** in Fleet Manager; the service user writes directly to `authorized_keys`. For manual recovery or non-deb installs:
 
 ```bash
 sudo /usr/lib/antminer-fleet-server/authorize-client-tunnel-key.sh \

@@ -25,6 +25,24 @@ fn write_config(
     session_days: i64,
     same_tls_path: bool,
 ) -> PathBuf {
+    write_config_with_tunnel(
+        directory,
+        database_url,
+        max_connections,
+        session_days,
+        same_tls_path,
+        "antminer-fleet-client-tunnel@127.0.0.1",
+    )
+}
+
+fn write_config_with_tunnel(
+    directory: &Path,
+    database_url: &str,
+    max_connections: u32,
+    session_days: i64,
+    same_tls_path: bool,
+    tunnel_destination: &str,
+) -> PathBuf {
     let certificate = directory.join("server.crt");
     let private_key = if same_tls_path {
         certificate.clone()
@@ -32,8 +50,9 @@ fn write_config(
         directory.join("server.key")
     };
     let config = directory.join("server.toml");
-    let tunnel_client_block = "[tunnel_client]\n\
-                                ssh_destination = \"antminer-fleet-client-tunnel@127.0.0.1\"\n";
+    let tunnel_client_block = format!(
+        "[tunnel_client]\nssh_destination = \"{tunnel_destination}\"\n"
+    );
     fs::write(
         &config,
         format!(
@@ -135,6 +154,23 @@ fn validate_config_rejects_reusing_one_file_for_certificate_and_key() {
     );
 
     assert_rejected(validate(&config), "must use different files");
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn validate_config_rejects_change_me_tunnel_destination() {
+    let directory = test_directory("tunnel-change-me");
+    let config = write_config_with_tunnel(
+        &directory,
+        "postgres://fleet:secret@127.0.0.1/fleet",
+        10,
+        30,
+        false,
+        "antminer-fleet-client-tunnel@CHANGE_ME",
+    );
+
+    assert_rejected(validate(&config), "placeholder host");
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }

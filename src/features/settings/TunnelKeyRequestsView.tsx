@@ -4,7 +4,7 @@ import {
   Panel,
   primaryButtonClass,
 } from "@/components/ui/Panel";
-import type { TunnelKeyRequest } from "@/types/db";
+import type { TunnelKeyRequestAdmin } from "@/types/db";
 import {
   approveTunnelKeyRequest,
   listTunnelKeyRequests,
@@ -16,7 +16,7 @@ function PendingRequestRow({
   req,
   onDone,
 }: {
-  req: TunnelKeyRequest;
+  req: TunnelKeyRequestAdmin;
   onDone: () => void;
 }) {
   const [note, setNote] = useState("");
@@ -84,7 +84,7 @@ function RecentRequestRow({
   req,
   onDone,
 }: {
-  req: TunnelKeyRequest;
+  req: TunnelKeyRequestAdmin;
   onDone: () => void;
 }) {
   const [note, setNote] = useState("");

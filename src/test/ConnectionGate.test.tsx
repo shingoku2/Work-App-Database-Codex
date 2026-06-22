@@ -244,4 +244,73 @@ describe("ConnectionGate", () => {
     expect(await screen.findByRole("button", { name: "Sign In" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Forget Server and Re-pair" })).toBeEnabled();
   });
+
+  it("shows rejection note and waits for Start over before clearing the form", async () => {
+    mockedState.mockResolvedValue({
+      paired: false,
+      status: "unpaired",
+      url: null,
+      fingerprint_sha256: null,
+      user: null,
+      error: null,
+    });
+    mockedTunnel.mockResolvedValue({
+      supported: true,
+      configured: false,
+      running: false,
+      local_port_open: false,
+      local_url: "https://localhost:8443",
+      remote_target: "127.0.0.1:8443",
+      process_id: null,
+      config_path: "C:/Users/example/AppData/Local/AntminerFleetManager/fleet-tunnel.local.json",
+      error: null,
+    });
+    mockedGenerateTunnelKey.mockResolvedValue({
+      identity_file: "C:/Users/example/.ssh/antminer_fleet_tunnel",
+      public_key_file: "C:/Users/example/.ssh/antminer_fleet_tunnel.pub",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+    });
+    mockedProbeServer.mockResolvedValue({
+      server: { product: "Fleet Server", version: "0.3.0", api_version: "v1" },
+      certificate_pem: "CERT",
+      fingerprint_sha256: "AA:BB",
+    });
+    mockedSubmitTunnelKeyRequest.mockResolvedValue({
+      id: 42,
+      label: "alice-workstation",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+      status: "pending",
+      note: null,
+      status_token: "token-42",
+      fingerprint_sha256: "SHA256:abc",
+      created_at: "2026-06-16T10:00:00Z",
+    });
+    mockedGetTunnelKeyRequestStatus.mockResolvedValue({
+      id: 42,
+      status: "rejected",
+      note: "Unknown device",
+      client_config: null,
+    });
+    const actor = userEvent.setup();
+
+    renderGate();
+
+    const serverUrlInput = await screen.findByLabelText("Server URL");
+    await actor.clear(serverUrlInput);
+    await actor.type(serverUrlInput, "https://fleet.example:8443");
+    await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
+    await actor.click(screen.getByRole("button", { name: "Generate This Computer's SSH Key" }));
+    await waitFor(() => expect(mockedProbeServer).toHaveBeenCalled());
+    await actor.click(screen.getByRole("button", { name: "Submit Key for Admin Approval" }));
+
+    expect(await screen.findByText(/request was rejected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Note: Unknown device/)).toBeInTheDocument();
+    expect(screen.getByText(/request #42/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate This Computer's SSH Key" })).not.toBeInTheDocument();
+
+    await actor.click(screen.getByRole("button", { name: "Start over" }));
+
+    expect(await screen.findByRole("button", { name: "Generate This Computer's SSH Key" })).toBeInTheDocument();
+    expect(vi.mocked(clearTunnelKeyOnboarding)).toHaveBeenCalled();
+  });
 });

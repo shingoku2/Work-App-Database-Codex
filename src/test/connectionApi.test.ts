@@ -113,7 +113,17 @@ describe("connection API", () => {
   });
 
   it("lists and manages tunnel key requests with camelCase args", async () => {
-    mockedCommand.mockResolvedValueOnce([]).mockResolvedValueOnce({
+    mockedCommand.mockResolvedValueOnce([
+      {
+        id: 7,
+        label: "bob-laptop",
+        public_key: "ssh-ed25519 AAAATEST bob",
+        status: "pending",
+        note: null,
+        fingerprint_sha256: "SHA256:def",
+        created_at: "2026-06-16T10:00:00Z",
+      },
+    ]).mockResolvedValueOnce({
       id: 7,
       label: "bob-laptop",
       public_key: "ssh-ed25519 AAAATEST bob",

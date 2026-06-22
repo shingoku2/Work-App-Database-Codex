@@ -23,7 +23,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=/var/lib/antminer-fleet
+ReadWritePaths=/var/lib/antminer-fleet /etc/antminer-fleet/client-tunnel
 
 [Install]
 WantedBy=multi-user.target

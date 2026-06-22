@@ -16,7 +16,7 @@ This guide covers onboarding a new desktop client through the restricted SSH tun
 2. Enter a machine label and server URL (if reachable on LAN/VPN).
 3. Click **Generate This Computer's SSH Key**.
 4. If the server is reachable, click **Submit Key for Admin Approval**. Otherwise click **Copy Onboarding Bundle** and send it to an admin out-of-band.
-5. Wait for admin approval (the app polls every 10 seconds when a request was submitted).
+5. If you submitted a request, wait for admin approval (the app polls every 10 seconds). If you only copied the bundle, there is no automatic polling — wait for the admin out-of-band, then enter the tunnel destination manually or submit later when the server is reachable.
 6. After approval, review the prefilled tunnel settings and click **Save and Start Tunnel**.
 7. Pair to `https://127.0.0.1:8443` and confirm the certificate fingerprint.
 8. Sign in with a normal Fleet Manager account.
@@ -27,7 +27,10 @@ The private key never leaves the user's computer.
 
 1. Open **Tunnel Keys** in the sidebar.
 2. Verify the request out-of-band (label, fingerprint, ticket, etc.).
-3. Optionally add a note and click **Approve**.
+3. Optionally add a note and click **Approve** or **Reject**.
+
+In-app **Approve** and **Revoke** require the packaged Debian layout: `authorized_keys` is owned `root:antminer-fleet` with mode `0660`, and the `antminer-fleet` service user can write through group membership. Manual `sudo` is only needed for recovery or non-deb installs.
+
 4. Tell the user their tunnel is approved. The app prefills the tunnel destination from server config when polling succeeds.
 
 ## Revocation

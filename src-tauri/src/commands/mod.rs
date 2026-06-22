@@ -3,7 +3,7 @@ use fleet_shared::{
     ApproveTunnelKeyRequest, AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CreateMiner,
     CreatePart, CreateSite, CreateUserRequest, CreateWebhook, DashboardSummary, LoginResponse,
     Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest, Site,
-    SubmitTunnelKeyRequest, TunnelKeyRequest, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
+    SubmitTunnelKeyRequest, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
     UpdateUserRequest, UpdateWebhook, User, Webhook, WebhookDelivery,
 };
 use serde::{Deserialize, Serialize};
@@ -746,7 +746,7 @@ pub async fn submit_tunnel_key_request(
 #[tauri::command]
 pub async fn list_tunnel_key_requests(
     state: State<'_, ClientState>,
-) -> Result<Vec<TunnelKeyRequest>, String> {
+) -> Result<Vec<TunnelKeyRequestAdmin>, String> {
     state.get("/api/v1/tunnel-key-requests").await
 }
 
