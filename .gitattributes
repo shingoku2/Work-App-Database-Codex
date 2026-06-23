@@ -1,0 +1,4 @@
+# Keep Rust manifest files LF-only on Windows.
+# `cargo tauri build` can rewrite src-tauri/Cargo.toml with LF endings;
+# without this, Git for Windows with core.autocrlf=true reports a fake dirty file.
+*.toml text eol=lf
