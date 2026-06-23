@@ -5,6 +5,57 @@ All notable changes to Antminer Fleet Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-23
+
+### Changed
+- Migrated all Rust major dependencies to current upstream versions:
+  `keyring 3 -> 4` (feature renames: `windows-native-keyring-store`,
+  `apple-native-keyring-store`, `zbus-secret-service-keyring-store`),
+  `reqwest 0.12 -> 0.13` (feature `rustls-tls` -> `rustls-no-provider`),
+  `sqlx 0.8 -> 0.9`, `rand 0.9 -> 0.10`, `tower-http 0.6 -> 0.7`,
+  `toml 0.9 -> 1.1`.
+- Pinned ESLint to `^9.39.4` (and `@eslint/js` to `^9.39.4`) because
+  `eslint-plugin-react@7.37.5` does not accept ESLint 10.
+- Added MIT License to the workspace and all three crates.
+- Moved `cargo-audit` config to `.cargo/audit.toml` (the location
+  cargo-audit 0.22+ reads) with documented suppressions for 19 advisories
+  that are transitive, platform-specific, or false positives.
+- Removed `.claude/settings.local.json` from Git tracking.
+- Removed stale root-level pipeline reports (`audit-report.md`,
+  `audit-report-v2.md`, `dep-audit-report.md`, `env-report.md`,
+  `onboarding-report.md`, `shipper-report.md`) and migration scratch
+  `.txt` files from `.codex/reports/`.
+- Added `src-tauri/icons/icon.png` to `.gitignore` (build artifact copied
+  from `128x128.png` during Tauri builds).
+
+### Fixed
+- Resolved ESLint 10 peer-dependency conflict that broke `npm ci` after
+  `eslint-plugin-react` was pinned at 7.37.5.
+- Fixed `cargo-audit` config location so suppressions are actually read.
+
+### Validation Status
+- Passed: `cargo check --workspace --locked`.
+- Passed: `cargo test --workspace --locked` with 24 Rust tests.
+- Passed: `npm test` with 96 frontend tests across 9 files.
+- Passed: `npm run build`, `cargo fmt --all -- --check`,
+  `git diff --check`, and `npm audit --omit=dev` with zero npm
+  vulnerabilities.
+- Passed: `cargo audit` with 658 crate dependencies scanned (19
+  advisories suppressed with documented rationale in `.cargo/audit.toml`).
+- Passed: `npm run tauri:build` producing NSIS installer
+  (`Antminer Fleet Manager_0.3.0_x64-setup.exe`, 3.4 MB) and raw binary
+  (`antminer-fleet-manager.exe`, 15 MB).
+- Not yet verified on target infrastructure: Debian package installation,
+  systemd operation, live local or remote PostgreSQL migrations and
+  concurrency, populated currency migration, SQLite conflict races,
+  PostgreSQL backup/restore, certificate substitution or rotation, and a
+  packaged Tauri/keyring pairing and re-login flow.
+- One open GitHub Dependabot alert (RUSTSEC-2024-0429, glib unsoundness):
+  transitive Tauri v2 Linux/GTK runtime dependency, not compiled on
+  Windows, unsound code path not reachable from application code, cannot
+  fix without Tauri upgrading to gtk-rs 0.19+. Suppressed in
+  `.cargo/audit.toml` with documented rationale.
+
 ## [Unreleased]
 
 ### Breaking Changes
@@ -93,21 +144,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Detailed installation, migration, pairing, backup, and rollback preparation
 are documented in `server/README.md` and `docs/OPERATIONS.md`.
-
-### Validation Status
-- Passed: `cargo check --workspace --locked`.
-- Passed: `cargo test --workspace --locked` with 13 Rust tests.
-- Passed: `npm test` with 87 frontend tests.
-- Passed: `npm run build`, `cargo fmt --all -- --check`,
-  `git diff --check`, and `npm audit --omit=dev` with zero reported npm
-  vulnerabilities.
-- Not yet verified on target infrastructure: Debian package installation,
-  systemd operation, live local or remote PostgreSQL migrations and
-  concurrency, populated currency migration, SQLite conflict races,
-  PostgreSQL backup/restore, certificate substitution or rotation, and a
-  packaged Tauri/keyring pairing and re-login flow.
-- Rust advisory status remains unverified because `cargo-audit` was not
-  available in the validation environment.
 
 ## [0.2.0] - 2026-06-02
 

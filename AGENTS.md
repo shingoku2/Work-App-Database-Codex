@@ -145,7 +145,7 @@ Start the server in a tmux session: `cargo run -p antminer-fleet-server -- --con
 
 ### Tauri desktop gotchas
 
-- Tauri build expects `src-tauri/icons/icon.png`, but the repo only tracks `128x128.png` and `icon.ico`. Copy or symlink before `tauri dev` / `cargo test -p antminer-fleet-manager`: `cp src-tauri/icons/128x128.png src-tauri/icons/icon.png`.
+- Tauri build expects `src-tauri/icons/icon.png`, but the repo only tracks `128x128.png` and `icon.ico`. The build process copies `128x128.png` to `icon.png` automatically; `icon.png` is gitignored as a build artifact.
 - Linux Secret Service (keyring) may be unavailable in headless/cloud VMs. Desktop login can fail with credential-storage errors unless D-Bus secret service is running. API-level E2E via `curl` against the server still validates core fleet behavior.
 - `npm run dev` alone serves the React UI on `http://127.0.0.1:1420` but Tauri `invoke` calls will not work without `npm run tauri:dev`.
 
@@ -157,7 +157,7 @@ Start the server in a tmux session: `cargo run -p antminer-fleet-server -- --con
 | Frontend build | `npm run build` |
 | Rust format | `cargo fmt --all -- --check` |
 | Rust compile | `cargo check --workspace --locked` |
-| Rust tests | `cargo test --workspace --locked` (needs `icon.png` symlink) |
+| Rust tests | `cargo test --workspace --locked` (needs `icon.png` — run `cp src-tauri/icons/128x128.png src-tauri/icons/icon.png` if missing) |
 | Prod audit | `npm audit --omit=dev` |
 
 ### Services
