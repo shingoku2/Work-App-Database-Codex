@@ -1,5 +1,5 @@
 import { command } from "@/lib/tauri";
-import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelClientConfig, TunnelConfigInput, TunnelKeyInfo, TunnelKeyOnboardingState, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, TunnelStatus, User, UserRole } from "@/types/db";
+import type { ApproveTunnelKeyRequest, ConnectionState, LoginResponse, PairingInfo, SubmitTunnelKeyRequest, TunnelConfigInput, TunnelKeyInfo, TunnelKeyOnboardingState, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, TunnelStatus, User, UserRole } from "@/types/db";
 
 export function getConnectionState(): Promise<ConnectionState> {
   return command<ConnectionState>("get_connection_state");
@@ -37,8 +37,8 @@ export function unpairServer(): Promise<void> {
   return command<void>("unpair_server");
 }
 
-export function login(username: string, password: string): Promise<{ user: User }> {
-  return command<{ user: User }>("login", { username, password });
+export function login(username: string, password: string): Promise<LoginResponse> {
+  return command<LoginResponse>("login", { username, password });
 }
 
 export function logout(): Promise<void> {

@@ -415,7 +415,6 @@ fn build_client(config: &ConnectionConfig) -> Result<reqwest::Client, String> {
         .with_no_client_auth();
     reqwest::Client::builder()
         .https_only(true)
-        .tls_built_in_root_certs(false)
         .use_preconfigured_tls(tls)
         .build()
         .map_err(|error| error.to_string())
@@ -567,7 +566,7 @@ async fn one_shot_request<B: Serialize + ?Sized>(
     body: Option<&B>,
 ) -> Result<reqwest::Response, reqwest::Error> {
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
+        .tls_danger_accept_invalid_certs(true)
         .https_only(true)
         .build()
         .expect("static one-shot HTTPS client must build");

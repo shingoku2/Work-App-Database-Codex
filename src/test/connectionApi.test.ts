@@ -53,11 +53,20 @@ describe("connection API", () => {
   });
 
   it("passes credentials only to login", async () => {
-    mockedCommand.mockResolvedValueOnce({ user });
-    await login("admin", "long-password");
+    mockedCommand.mockResolvedValueOnce({
+      token: "session-token",
+      expires_at: "2026-06-23T18:00:00Z",
+      user,
+    });
+    const response = await login("admin", "long-password");
     expect(mockedCommand).toHaveBeenCalledWith("login", {
       username: "admin",
       password: "long-password",
+    });
+    expect(response).toEqual({
+      token: "session-token",
+      expires_at: "2026-06-23T18:00:00Z",
+      user,
     });
   });
 

@@ -138,6 +138,7 @@ dependencies = [
  "chrono",
  "clap",
  "fleet-shared",
+ "hmac 0.12.1",
  "rand 0.10.1",
  "rcgen",
  "reqwest",

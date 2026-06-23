@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  Panel,
-  primaryButtonClass,
-} from "@/components/ui/Panel";
+import { Panel } from "@/components/ui/Panel";
 import type { TunnelKeyRequestAdmin } from "@/types/db";
 import {
   approveTunnelKeyRequest,

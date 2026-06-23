@@ -52,6 +52,13 @@ workflows.
   normal CA-only trust or add an insecure certificate bypass.
 - `/pairing` and `/health` must remain available without bearer
   authentication.
+- Tunnel-key onboarding has a narrow pre-pairing exception:
+  `POST /api/v1/tunnel-key-requests` and
+  `GET /api/v1/tunnel-key-requests/{id}/status?token=...` are unauthenticated
+  so a new desktop client can request tunnel access before it has a pinned
+  server certificate or bearer session. These calls must stay HTTPS-only,
+  must not expose private key material, and must be treated as pre-trust
+  onboarding paths only.
 - Pairing retrieves the certificate, requires independent full SHA-256
   fingerprint confirmation, and verifies `/health` using the pinned
   certificate.

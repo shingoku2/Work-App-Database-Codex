@@ -35,9 +35,15 @@ describe("updatePart", () => {
 });
 
 describe("deletePart", () => {
-  it("passes the sku under 'sku'", async () => {
+  it("passes the sku, version, and site_id under their respective keys", async () => {
     mockedCommand.mockResolvedValueOnce(undefined);
     await deletePart("HSB-S21", 4);
-    expect(mockedCommand).toHaveBeenCalledWith("delete_part", { sku: "HSB-S21", version: 4 });
+    expect(mockedCommand).toHaveBeenCalledWith("delete_part", { sku: "HSB-S21", version: 4, site_id: null });
+  });
+
+  it("forwards an explicit site_id when provided", async () => {
+    mockedCommand.mockResolvedValueOnce(undefined);
+    await deletePart("HSB-S21", 4, 7);
+    expect(mockedCommand).toHaveBeenCalledWith("delete_part", { sku: "HSB-S21", version: 4, site_id: 7 });
   });
 });

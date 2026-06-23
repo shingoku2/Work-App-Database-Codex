@@ -11,7 +11,7 @@ export function DashboardView() {
   if (error) {
     return (
       <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-5 text-amber-100">
-        The desktop database is not available in this browser session. Run the app with <code>npm run tauri:dev</code> to use local SQLite records.
+        The fleet server is not available. {String(error)}
       </div>
     );
   }

@@ -214,7 +214,7 @@ describe("ConnectionGate", () => {
         user,
         error: null,
       });
-    mockedLogin.mockResolvedValue({ user });
+    mockedLogin.mockResolvedValue({ token: "test-token", expires_at: "2026-12-31T00:00:00Z", user });
     const actor = userEvent.setup();
 
     renderGate();

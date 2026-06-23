@@ -20,6 +20,7 @@ use fleet_shared::{
     UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook,
     WebhookDelivery, API_VERSION,
 };
+use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sqlx::{AssertSqlSafe, PgPool, Row};
@@ -32,6 +33,8 @@ use std::{
 use tokio::sync::Mutex;
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use uuid::Uuid;
+
+type HmacSha256 = Hmac<Sha256>;
 
 const SECRET_MASK: &str = "********";
 
@@ -148,6 +151,19 @@ mod tests {
     use super::*;
     use std::net::Ipv4Addr;
 
+    fn test_user(role: UserRole, site_id: Option<i64>) -> User {
+        User {
+            id: 1,
+            site_id,
+            site_name: None,
+            username: "test".into(),
+            display_name: "Test User".into(),
+            role,
+            enabled: true,
+            version: 1,
+        }
+    }
+
     #[test]
     fn login_limiter_is_source_aware_and_expires_entries() {
         let now = Instant::now();
@@ -186,6 +202,50 @@ mod tests {
             assert!(limiter.allow_submit(source, now));
         }
         assert!(!limiter.allow_submit(source, now));
+    }
+
+    #[test]
+    fn non_admin_site_filter_cannot_be_overridden() {
+        let user = test_user(UserRole::User, Some(10));
+
+        assert_eq!(resolve_site_filter(&user, None).unwrap(), Some(10));
+        assert_eq!(resolve_site_filter(&user, Some(10)).unwrap(), Some(10));
+        let error = resolve_site_filter(&user, Some(11)).unwrap_err();
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn admin_site_filter_can_target_any_site_or_all_sites() {
+        let user = test_user(UserRole::Admin, None);
+
+        assert_eq!(resolve_site_filter(&user, None).unwrap(), None);
+        assert_eq!(resolve_site_filter(&user, Some(11)).unwrap(), Some(11));
+    }
+
+    #[test]
+    fn ensure_site_access_rejects_cross_site_non_admin() {
+        let user = test_user(UserRole::User, Some(10));
+        let error = ensure_site_access(&user, 11).unwrap_err();
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+        assert!(ensure_site_access(&user, 10).is_ok());
+    }
+
+    #[test]
+    fn webhook_url_validation_rejects_unsafe_destinations() {
+        assert!(validate_webhook_url("https://hooks.example.com/fleet").is_ok());
+        assert!(validate_webhook_url("http://hooks.example.com/fleet").is_err());
+        assert!(validate_webhook_url("https://localhost/fleet").is_err());
+        assert!(validate_webhook_url("https://127.0.0.1/fleet").is_err());
+        assert!(validate_webhook_url("https://10.0.0.5/fleet").is_err());
+        assert!(validate_webhook_url("file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn webhook_signature_is_hmac_sha256_hex() {
+        assert_eq!(
+            webhook_signature("secret", br#"{"event":"miner.created"}"#),
+            "4fd0987834186b9183258afb2c63edd80e5a84fac325db663c46c131e4252663"
+        );
     }
 }
 
@@ -452,21 +512,54 @@ async fn require_admin(state: &AppState, headers: &HeaderMap) -> AppResult<User>
     Ok(user)
 }
 
-/// Resolve the effective site_id for a request.
-/// Priority: explicit query > user's assigned site > default enabled site.
-async fn resolve_site_id(
-    _pool: &PgPool,
-    explicit: Option<i64>,
-    user_site_id: Option<i64>,
-) -> AppResult<Option<i64>> {
+/// Resolve the effective optional site filter for a request.
+/// Admins may query any site, or all sites when no explicit site is provided.
+/// Non-admin users are locked to their assigned site and cannot override it.
+fn resolve_site_filter(user: &User, explicit: Option<i64>) -> AppResult<Option<i64>> {
+    if user.role == UserRole::Admin {
+        return Ok(explicit);
+    }
+    let assigned = user
+        .site_id
+        .ok_or_else(|| AppError::forbidden("site assignment required"))?;
     if let Some(id) = explicit {
-        return Ok(Some(id));
+        if id != assigned {
+            return Err(AppError::forbidden("site access denied"));
+        }
     }
-    if let Some(id) = user_site_id {
-        return Ok(Some(id));
+    Ok(Some(assigned))
+}
+
+/// Resolve a required site id for create/delete requests.
+/// Admins without an explicit site fall back to the default enabled site.
+/// Non-admin users are locked to their assigned site and cannot override it.
+async fn resolve_required_site_id(
+    pool: &PgPool,
+    user: &User,
+    explicit: Option<i64>,
+) -> AppResult<i64> {
+    if user.role == UserRole::Admin {
+        return match explicit {
+            Some(id) => Ok(id),
+            None => default_site_id(pool).await,
+        };
     }
-    // Admin with no site assigned and no filter → None (all sites)
-    Ok(None)
+    let assigned = user
+        .site_id
+        .ok_or_else(|| AppError::forbidden("site assignment required"))?;
+    if let Some(id) = explicit {
+        if id != assigned {
+            return Err(AppError::forbidden("site access denied"));
+        }
+    }
+    Ok(assigned)
+}
+
+fn ensure_site_access(user: &User, site_id: i64) -> AppResult<()> {
+    if user.role == UserRole::Admin || user.site_id == Some(site_id) {
+        return Ok(());
+    }
+    Err(AppError::forbidden("site access denied"))
 }
 
 /// Get the default enabled site id (used when site_id must be set but was not provided).
@@ -479,6 +572,7 @@ async fn default_site_id(pool: &PgPool) -> AppResult<i64> {
 }
 
 /// Insert an audit log row.  Failures are swallowed — they must not break the caller.
+#[allow(clippy::too_many_arguments)]
 async fn audit_log(
     state: &AppState,
     user_id: Option<i64>,
@@ -544,6 +638,13 @@ fn action_to_webhook_event(action: &str) -> Option<&'static str> {
 /// Fire webhook deliveries for all enabled webhooks subscribed to `event`.
 /// Best-effort: failures are logged but never propagate.
 async fn dispatch_webhooks(state: &AppState, event: &str, payload: serde_json::Value) {
+    let body = match serde_json::to_vec(&payload) {
+        Ok(body) => body,
+        Err(err) => {
+            tracing::warn!(error = %err, "webhook payload serialization failed (non-fatal)");
+            return;
+        }
+    };
     let rows = match sqlx::query(
         "SELECT id, url, secret FROM webhooks WHERE enabled = TRUE AND $1 = ANY(events)",
     )
@@ -570,11 +671,11 @@ async fn dispatch_webhooks(state: &AppState, event: &str, payload: serde_json::V
             .header("X-Fleet-Event", event);
 
         if let Some(ref s) = secret {
-            req = req.header("X-Fleet-Signature", s.as_str());
+            req = req.header("X-Fleet-Signature", webhook_signature(s, &body));
         }
 
         let (success, response_status, response_body, error_msg) =
-            match req.json(&payload).send().await {
+            match req.body(body.clone()).send().await {
                 Ok(resp) => {
                     let status = resp.status().as_u16() as i32;
                     let ok = resp.status().is_success();
@@ -935,7 +1036,7 @@ async fn list_miners(
     Query(query): Query<SiteQuery>,
 ) -> AppResult<Json<Vec<Miner>>> {
     let (user, _) = authenticated_user(&state, &headers).await?;
-    let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
+    let site_id = resolve_site_filter(&user, query.site_id)?;
     let rows = if let Some(sid) = site_id {
         sqlx::query(AssertSqlSafe(format!(
             "{MINER_SELECT} WHERE m.site_id = $1 ORDER BY m.serial"
@@ -961,22 +1062,16 @@ async fn create_miner(
 ) -> AppResult<(StatusCode, Json<Miner>)> {
     let (user, _) = authenticated_user(&state, &headers).await?;
     normalize_and_validate_miner(&mut input).map_err(AppError::bad_request)?;
-    let site_id = match input.site_id {
-        Some(id) => id,
-        None => match user.site_id {
-            Some(id) => id,
-            None => default_site_id(&state.pool).await?,
-        },
-    };
-    let row = sqlx::query(AssertSqlSafe(format!(
+    let site_id = resolve_required_site_id(&state.pool, &user, input.site_id).await?;
+    let row = sqlx::query(
         r#"INSERT INTO miners (site_id,serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,location,status,acquired_date,notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
            RETURNING id, site_id, NULL::TEXT AS site_name,
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
-           location,status,acquired_date,notes,version"#
-    )))
+           location,status,acquired_date,notes,version"#,
+    )
     .bind(site_id)
     .bind(&input.serial).bind(&input.model).bind(&input.firmware).bind(&input.client_name)
     .bind(&input.miner_type).bind(&input.ip_address).bind(&input.mac_address).bind(&input.pickaxe)
@@ -1032,8 +1127,20 @@ async fn update_miner(
         notes: input.notes,
     };
     normalize_and_validate_miner(&mut validated).map_err(AppError::bad_request)?;
+    let existing_site_id: i64 = sqlx::query_scalar("SELECT site_id FROM miners WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(AppError::database)?
+        .ok_or_else(|| AppError::conflict("miner changed or was deleted; reload and try again"))?;
+    ensure_site_access(&user, existing_site_id)?;
+    let target_site_id = if validated.site_id.is_some() {
+        Some(resolve_required_site_id(&state.pool, &user, validated.site_id).await?)
+    } else {
+        None
+    };
     // If site_id not in update, keep existing
-    let row = sqlx::query(AssertSqlSafe(format!(
+    let row = sqlx::query(
         r#"UPDATE miners SET
            site_id=COALESCE($1, site_id),
            serial=$2,model=$3,firmware=$4,client_name=$5,miner_type=$6,ip_address=$7,mac_address=$8,
@@ -1043,9 +1150,9 @@ async fn update_miner(
            RETURNING id, site_id, NULL::TEXT AS site_name,
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
-           location,status,acquired_date,notes,version"#
-    )))
-    .bind(validated.site_id)
+           location,status,acquired_date,notes,version"#,
+    )
+    .bind(target_site_id)
     .bind(&validated.serial).bind(&validated.model).bind(&validated.firmware).bind(&validated.client_name)
     .bind(&validated.miner_type).bind(&validated.ip_address).bind(&validated.mac_address).bind(&validated.pickaxe)
     .bind(&validated.miner_state).bind(&validated.miner_row).bind(&validated.miner_index).bind(&validated.miner_rack)
@@ -1078,11 +1185,19 @@ async fn delete_miner(
     Query(query): Query<VersionQuery>,
 ) -> AppResult<StatusCode> {
     let (user, _) = authenticated_user(&state, &headers).await?;
-    let serial: Option<String> = sqlx::query_scalar("SELECT serial FROM miners WHERE id=$1")
+    let miner_row = sqlx::query("SELECT serial, site_id FROM miners WHERE id=$1")
         .bind(id)
         .fetch_optional(&state.pool)
         .await
         .map_err(AppError::database)?;
+    let Some(miner_row) = miner_row else {
+        return Err(AppError::conflict(
+            "miner changed or was deleted; reload and try again",
+        ));
+    };
+    let serial: Option<String> = miner_row.get("serial");
+    let site_id: i64 = miner_row.get("site_id");
+    ensure_site_access(&user, site_id)?;
     let result = sqlx::query("DELETE FROM miners WHERE id=$1 AND version=$2")
         .bind(id)
         .bind(query.version)
@@ -1199,7 +1314,7 @@ async fn list_parts(
     Query(query): Query<SiteQuery>,
 ) -> AppResult<Json<Vec<Part>>> {
     let (user, _) = authenticated_user(&state, &headers).await?;
-    let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
+    let site_id = resolve_site_filter(&user, query.site_id)?;
     let rows = if let Some(sid) = site_id {
         sqlx::query(AssertSqlSafe(format!(
             "{PART_SELECT} WHERE p.site_id = $1 ORDER BY p.name"
@@ -1226,16 +1341,10 @@ async fn create_part(
     let (user, _) = authenticated_user(&state, &headers).await?;
     input.sku = input.sku.trim().to_string();
     validate_part(&input).map_err(AppError::bad_request)?;
-    let site_id = match input.site_id {
-        Some(id) => id,
-        None => match user.site_id {
-            Some(id) => id,
-            None => default_site_id(&state.pool).await?,
-        },
-    };
-    let row = sqlx::query(AssertSqlSafe(format!(
-        "INSERT INTO parts (site_id,sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING site_id, NULL::TEXT AS site_name, sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes,version"
-    )))
+    let site_id = resolve_required_site_id(&state.pool, &user, input.site_id).await?;
+    let row = sqlx::query(
+        "INSERT INTO parts (site_id,sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING site_id, NULL::TEXT AS site_name, sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes,version",
+    )
     .bind(site_id)
     .bind(&input.sku).bind(input.name.trim()).bind(&input.category).bind(input.qty_on_hand)
     .bind(input.reorder_threshold).bind(&input.supplier).bind(input.unit_cost_cents).bind(&input.notes)
@@ -1268,6 +1377,7 @@ async fn update_part(
     if input.sku != sku {
         return Err(AppError::bad_request("path and body SKUs differ"));
     }
+    ensure_site_access(&user, input.site_id)?;
     validate_part(&CreatePart {
         site_id: Some(input.site_id),
         sku: input.sku.clone(),
@@ -1313,13 +1423,7 @@ async fn delete_part(
     Query(query): Query<VersionSiteQuery>,
 ) -> AppResult<StatusCode> {
     let (user, _) = authenticated_user(&state, &headers).await?;
-    let site_id = match query.site_id {
-        Some(id) => id,
-        None => match user.site_id {
-            Some(id) => id,
-            None => default_site_id(&state.pool).await?,
-        },
-    };
+    let site_id = resolve_required_site_id(&state.pool, &user, query.site_id).await?;
     let result = sqlx::query("DELETE FROM parts WHERE sku=$1 AND site_id=$2 AND version=$3")
         .bind(&sku)
         .bind(site_id)
@@ -1358,7 +1462,7 @@ async fn dashboard(
     Query(query): Query<SiteQuery>,
 ) -> AppResult<Json<DashboardSummary>> {
     let (user, _) = authenticated_user(&state, &headers).await?;
-    let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
+    let site_id = resolve_site_filter(&user, query.site_id)?;
     let (where_clause, bind_sid): (&str, Option<i64>) = if let Some(sid) = site_id {
         (" WHERE site_id = $1", Some(sid))
     } else {
@@ -1441,8 +1545,6 @@ async fn list_audit_log(
         bind_index += 1;
     }
 
-    let _ = bind_index;
-
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
@@ -1450,9 +1552,11 @@ async fn list_audit_log(
     };
 
     let limit = query.limit.unwrap_or(200).min(1000);
-    let offset = query.offset.unwrap_or(0);
+    let offset = query.offset.unwrap_or(0).min(100_000);
+    let limit_index = bind_index;
+    let offset_index = bind_index + 1;
     let sql = format!(
-        "SELECT id, user_id, username, action, target_type, target_id, target_serial, old_values, new_values, ip_address, user_agent, created_at FROM audit_log {where_clause} ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}"
+        "SELECT id, user_id, username, action, target_type, target_id, target_serial, old_values, new_values, ip_address, user_agent, created_at FROM audit_log {where_clause} ORDER BY created_at DESC LIMIT ${limit_index} OFFSET ${offset_index}"
     );
 
     let mut q = sqlx::query(AssertSqlSafe(sql));
@@ -1474,6 +1578,7 @@ async fn list_audit_log(
     if let Some(v) = query.to {
         q = q.bind(v);
     }
+    q = q.bind(limit).bind(offset);
 
     let rows = q.fetch_all(&state.pool).await.map_err(AppError::database)?;
     let entries = rows
@@ -1504,6 +1609,50 @@ async fn list_audit_log(
 
 fn mask_webhook_secret(secret: Option<String>) -> Option<String> {
     secret.map(|_| SECRET_MASK.to_string())
+}
+
+fn validate_webhook_url(raw: &str) -> AppResult<String> {
+    let trimmed = raw.trim();
+    let url =
+        url::Url::parse(trimmed).map_err(|_| AppError::bad_request("webhook URL is invalid"))?;
+    if url.scheme() != "https" {
+        return Err(AppError::bad_request("webhook URL must use https"));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::bad_request("webhook URL must include a host"))?;
+    if host.eq_ignore_ascii_case("localhost") {
+        return Err(AppError::bad_request("webhook URL host is not allowed"));
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+            return Err(AppError::bad_request("webhook URL host is not allowed"));
+        }
+        match ip {
+            IpAddr::V4(ipv4) => {
+                if ipv4.is_private() || ipv4.is_link_local() {
+                    return Err(AppError::bad_request("webhook URL host is not allowed"));
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                if ipv6.is_unique_local() || ipv6.is_unicast_link_local() {
+                    return Err(AppError::bad_request("webhook URL host is not allowed"));
+                }
+            }
+        }
+    }
+    Ok(trimmed.to_string())
+}
+
+fn webhook_signature(secret: &str, body: &[u8]) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts keys of any length");
+    mac.update(body);
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn webhook_from_row(row: &sqlx::postgres::PgRow) -> Webhook {
@@ -1564,12 +1713,13 @@ async fn create_webhook(
     if input.url.trim().is_empty() {
         return Err(AppError::bad_request("webhook URL is required"));
     }
+    let url = validate_webhook_url(&input.url)?;
     let secret = input.secret.filter(|s| !s.is_empty() && s != SECRET_MASK);
     let row = sqlx::query(
         "INSERT INTO webhooks (name, url, secret, events, enabled) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, url, secret, events, enabled, version",
     )
     .bind(input.name.trim())
-    .bind(input.url.trim())
+    .bind(&url)
     .bind(secret)
     .bind(&input.events)
     .bind(input.enabled)
@@ -1592,6 +1742,7 @@ async fn update_webhook(
     if input.url.trim().is_empty() {
         return Err(AppError::bad_request("webhook URL is required"));
     }
+    let url = validate_webhook_url(&input.url)?;
     // null / "" / "********" → preserve; any other non-empty → replace
     let secret_update = input.secret.filter(|s| !s.is_empty() && s != SECRET_MASK);
 
@@ -1600,7 +1751,7 @@ async fn update_webhook(
             "UPDATE webhooks SET name=$1, url=$2, secret=$3, events=$4, enabled=$5, version=version+1, updated_at=NOW() WHERE id=$6 AND version=$7 RETURNING id, name, url, secret, events, enabled, version",
         )
         .bind(input.name.trim())
-        .bind(input.url.trim())
+        .bind(&url)
         .bind(new_secret)
         .bind(&input.events)
         .bind(input.enabled)
@@ -1614,7 +1765,7 @@ async fn update_webhook(
             "UPDATE webhooks SET name=$1, url=$2, events=$3, enabled=$4, version=version+1, updated_at=NOW() WHERE id=$5 AND version=$6 RETURNING id, name, url, secret, events, enabled, version",
         )
         .bind(input.name.trim())
-        .bind(input.url.trim())
+        .bind(&url)
         .bind(&input.events)
         .bind(input.enabled)
         .bind(id)

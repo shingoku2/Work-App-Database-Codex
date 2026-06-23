@@ -6,7 +6,7 @@ mod import;
 use clap::{Parser, Subcommand, ValueEnum};
 use config::ServerConfig;
 use sqlx::postgres::PgPoolOptions;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "antminer-fleet-server", version)]
@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run_backup(
     database_url: &str,
-    output: &PathBuf,
+    output: &Path,
     format: BackupFormat,
     compress: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -195,7 +195,7 @@ async fn run_backup(
 
 async fn run_restore(
     database_url: &str,
-    input: &PathBuf,
+    input: &Path,
     clean: bool,
     no_owner: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {

@@ -3,17 +3,17 @@ use fleet_shared::{
     ApproveTunnelKeyRequest, AuditLogEntry, AuditLogQuery, ChangePasswordRequest, CreateMiner,
     CreatePart, CreateSite, CreateUserRequest, CreateWebhook, DashboardSummary, LoginResponse,
     Miner, MinerImportResult, PairingInfo, Part, ResetPasswordRequest, Site,
-    SubmitTunnelKeyRequest, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, UpdateMiner, UpdateSite,
-    UpdateUserRequest, UpdateWebhook, User, Webhook, WebhookDelivery,
+    SubmitTunnelKeyRequest, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus,
+    UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, Webhook, WebhookDelivery,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::AppHandle;
 #[cfg(target_os = "windows")]
 use tauri::Manager;
-use tauri::AppHandle;
+use tauri::State;
 
 const DEFAULT_TUNNEL_PORT: u16 = 8443;
 
