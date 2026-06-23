@@ -22,7 +22,7 @@ use fleet_shared::{
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use sqlx::{PgPool, Row};
+use sqlx::{AssertSqlSafe, PgPool, Row};
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, SocketAddr},
@@ -937,15 +937,15 @@ async fn list_miners(
     let (user, _) = authenticated_user(&state, &headers).await?;
     let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
     let rows = if let Some(sid) = site_id {
-        sqlx::query(&format!(
+        sqlx::query(AssertSqlSafe(format!(
             "{MINER_SELECT} WHERE m.site_id = $1 ORDER BY m.serial"
-        ))
+        )))
         .bind(sid)
         .fetch_all(&state.pool)
         .await
         .map_err(AppError::database)?
     } else {
-        sqlx::query(&format!("{MINER_SELECT} ORDER BY m.serial"))
+        sqlx::query(AssertSqlSafe(format!("{MINER_SELECT} ORDER BY m.serial")))
             .fetch_all(&state.pool)
             .await
             .map_err(AppError::database)?
@@ -968,7 +968,7 @@ async fn create_miner(
             None => default_site_id(&state.pool).await?,
         },
     };
-    let row = sqlx::query(&format!(
+    let row = sqlx::query(AssertSqlSafe(format!(
         r#"INSERT INTO miners (site_id,serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,location,status,acquired_date,notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
@@ -976,7 +976,7 @@ async fn create_miner(
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
            location,status,acquired_date,notes,version"#
-    ))
+    )))
     .bind(site_id)
     .bind(&input.serial).bind(&input.model).bind(&input.firmware).bind(&input.client_name)
     .bind(&input.miner_type).bind(&input.ip_address).bind(&input.mac_address).bind(&input.pickaxe)
@@ -1033,7 +1033,7 @@ async fn update_miner(
     };
     normalize_and_validate_miner(&mut validated).map_err(AppError::bad_request)?;
     // If site_id not in update, keep existing
-    let row = sqlx::query(&format!(
+    let row = sqlx::query(AssertSqlSafe(format!(
         r#"UPDATE miners SET
            site_id=COALESCE($1, site_id),
            serial=$2,model=$3,firmware=$4,client_name=$5,miner_type=$6,ip_address=$7,mac_address=$8,
@@ -1044,7 +1044,7 @@ async fn update_miner(
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
            location,status,acquired_date,notes,version"#
-    ))
+    )))
     .bind(validated.site_id)
     .bind(&validated.serial).bind(&validated.model).bind(&validated.firmware).bind(&validated.client_name)
     .bind(&validated.miner_type).bind(&validated.ip_address).bind(&validated.mac_address).bind(&validated.pickaxe)
@@ -1201,15 +1201,15 @@ async fn list_parts(
     let (user, _) = authenticated_user(&state, &headers).await?;
     let site_id = resolve_site_id(&state.pool, query.site_id, user.site_id).await?;
     let rows = if let Some(sid) = site_id {
-        sqlx::query(&format!(
+        sqlx::query(AssertSqlSafe(format!(
             "{PART_SELECT} WHERE p.site_id = $1 ORDER BY p.name"
-        ))
+        )))
         .bind(sid)
         .fetch_all(&state.pool)
         .await
         .map_err(AppError::database)?
     } else {
-        sqlx::query(&format!("{PART_SELECT} ORDER BY p.name"))
+        sqlx::query(AssertSqlSafe(format!("{PART_SELECT} ORDER BY p.name")))
             .fetch_all(&state.pool)
             .await
             .map_err(AppError::database)?
@@ -1233,9 +1233,9 @@ async fn create_part(
             None => default_site_id(&state.pool).await?,
         },
     };
-    let row = sqlx::query(&format!(
+    let row = sqlx::query(AssertSqlSafe(format!(
         "INSERT INTO parts (site_id,sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING site_id, NULL::TEXT AS site_name, sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes,version"
-    ))
+    )))
     .bind(site_id)
     .bind(&input.sku).bind(input.name.trim()).bind(&input.category).bind(input.qty_on_hand)
     .bind(input.reorder_threshold).bind(&input.supplier).bind(input.unit_cost_cents).bind(&input.notes)
@@ -1365,9 +1365,7 @@ async fn dashboard(
         ("", None)
     };
     let counts = if let Some(sid) = bind_sid {
-        sqlx::query(
-            &format!("SELECT (SELECT COUNT(*) FROM miners{where_clause}) unit_count, (SELECT COUNT(*) FROM parts{where_clause}) part_count, (SELECT COUNT(*) FROM parts{where_clause} AND qty_on_hand <= reorder_threshold) low_stock_count")
-        ).bind(sid).bind(sid).bind(sid).fetch_one(&state.pool).await.map_err(AppError::database)?
+        sqlx::query(AssertSqlSafe(format!("SELECT (SELECT COUNT(*) FROM miners{where_clause}) unit_count, (SELECT COUNT(*) FROM parts{where_clause}) part_count, (SELECT COUNT(*) FROM parts{where_clause} AND qty_on_hand <= reorder_threshold) low_stock_count"))).bind(sid).bind(sid).bind(sid).fetch_one(&state.pool).await.map_err(AppError::database)?
     } else {
         sqlx::query(
             "SELECT (SELECT COUNT(*) FROM miners) unit_count, (SELECT COUNT(*) FROM parts) part_count, (SELECT COUNT(*) FROM parts WHERE qty_on_hand <= reorder_threshold) low_stock_count"
@@ -1383,10 +1381,10 @@ async fn dashboard(
             .map_err(AppError::database)?
     };
     let low_parts = if let Some(sid) = bind_sid {
-        sqlx::query(&format!("{PART_SELECT} WHERE p.site_id=$1 AND p.qty_on_hand <= p.reorder_threshold ORDER BY p.qty_on_hand, p.name LIMIT 10"))
+        sqlx::query(AssertSqlSafe(format!("{PART_SELECT} WHERE p.site_id=$1 AND p.qty_on_hand <= p.reorder_threshold ORDER BY p.qty_on_hand, p.name LIMIT 10")))
             .bind(sid).fetch_all(&state.pool).await.map_err(AppError::database)?
     } else {
-        sqlx::query(&format!("{PART_SELECT} WHERE p.qty_on_hand <= p.reorder_threshold ORDER BY p.qty_on_hand, p.name LIMIT 10"))
+        sqlx::query(AssertSqlSafe(format!("{PART_SELECT} WHERE p.qty_on_hand <= p.reorder_threshold ORDER BY p.qty_on_hand, p.name LIMIT 10")))
             .fetch_all(&state.pool).await.map_err(AppError::database)?
     };
     Ok(Json(DashboardSummary {
@@ -1457,7 +1455,7 @@ async fn list_audit_log(
         "SELECT id, user_id, username, action, target_type, target_id, target_serial, old_values, new_values, ip_address, user_agent, created_at FROM audit_log {where_clause} ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}"
     );
 
-    let mut q = sqlx::query(&sql);
+    let mut q = sqlx::query(AssertSqlSafe(sql));
     if let Some(v) = query.user_id {
         q = q.bind(v);
     }
@@ -1903,9 +1901,7 @@ async fn list_tunnel_key_requests(
     .await
     .map_err(AppError::database)?;
     Ok(Json(
-        rows.iter()
-            .map(tunnel_key_request_admin_from_row)
-            .collect(),
+        rows.iter().map(tunnel_key_request_admin_from_row).collect(),
     ))
 }
 
@@ -1959,8 +1955,8 @@ async fn approve_tunnel_key_request(
     {
         Ok(row) => row,
         Err(db_err) => {
-            let compensation = run_tunnel_script("revoke-client-tunnel-key.sh", &["--label", &label])
-                .await;
+            let compensation =
+                run_tunnel_script("revoke-client-tunnel-key.sh", &["--label", &label]).await;
             let compensation_ok = compensation
                 .as_ref()
                 .map(|outcome| outcome.exit_code == 0 || outcome.exit_code == 2)

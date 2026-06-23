@@ -6,7 +6,7 @@ use std::{
 };
 
 fn script_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../scripts/{name}"))
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("scripts/{name}"))
 }
 
 fn temp_authorized_keys(label: &str) -> PathBuf {
@@ -29,7 +29,9 @@ fn authorize_and_revoke_client_tunnel_keys() {
     }
 
     let authorized_keys = temp_authorized_keys("lifecycle");
-    let public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWiVhcv4K4fFL test";
+    let public_key_material =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWiVhcv4K4fFL";
+    let public_key = format!("{public_key_material} test");
 
     let authorize = Command::new("sh")
         .arg(script_path("authorize-client-tunnel-key.sh"))
@@ -37,7 +39,7 @@ fn authorize_and_revoke_client_tunnel_keys() {
             "ANTMINER_FLEET_CLIENT_TUNNEL_AUTHORIZED_KEYS",
             &authorized_keys,
         )
-        .args(["--label", "alice-laptop", "--public-key", public_key])
+        .args(["--label", "alice-laptop", "--public-key", &public_key])
         .output()
         .expect("authorize script should run");
     assert!(
@@ -48,7 +50,7 @@ fn authorize_and_revoke_client_tunnel_keys() {
 
     let content = fs::read_to_string(&authorized_keys).expect("authorized_keys should be readable");
     assert!(content.contains("antminer-fleet-client:alice-laptop"));
-    assert!(content.contains(public_key));
+    assert!(content.contains(public_key_material));
 
     let revoke = Command::new("sh")
         .arg(script_path("revoke-client-tunnel-key.sh"))

@@ -50,9 +50,8 @@ fn write_config_with_tunnel(
         directory.join("server.key")
     };
     let config = directory.join("server.toml");
-    let tunnel_client_block = format!(
-        "[tunnel_client]\nssh_destination = \"{tunnel_destination}\"\n"
-    );
+    let tunnel_client_block =
+        format!("[tunnel_client]\nssh_destination = \"{tunnel_destination}\"\n");
     fs::write(
         &config,
         format!(
