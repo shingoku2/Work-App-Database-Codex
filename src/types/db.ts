@@ -50,6 +50,12 @@ export interface DashboardSummary {
 
 export type UserRole = "admin" | "user";
 
+export interface LoginResponse {
+  token: string;
+  expires_at: string;
+  user: User;
+}
+
 export interface User {
   id: number;
   site_id: number | null;

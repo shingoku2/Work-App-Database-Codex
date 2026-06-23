@@ -179,9 +179,6 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
       setApprovedReady(false);
       await persistOnboarding(req, req.status_token);
     },
-    onError: (error) => {
-      console.error("Failed to submit tunnel key:", error);
-    },
   });
 
   const startExisting = useMutation({ mutationFn: startTunnelConnection, onSuccess: onComplete });

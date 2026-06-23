@@ -86,7 +86,9 @@ export function MinersView({ canImport }: { canImport: boolean }) {
           disabled={deleteMutation.isPending}
           onClick={(event) => {
             event.stopPropagation();
-            deleteMutation.mutate({ id: row.original.id, version: row.original.version });
+            if (window.confirm(`Delete miner "${row.original.serial}"?`)) {
+              deleteMutation.mutate({ id: row.original.id, version: row.original.version });
+            }
           }}
         >
           Delete
@@ -178,7 +180,6 @@ export function MinersView({ canImport }: { canImport: boolean }) {
               onChange={(event) => {
                 handleImport(event.target.files?.[0] ?? null).catch((importError) => {
                   importMutation.reset();
-                  console.error(importError);
                   setImportIsError(true);
                   setImportMessage(importError instanceof Error && importError.message ? importError.message : "Import failed.");
                 });

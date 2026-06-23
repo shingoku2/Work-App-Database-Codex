@@ -188,7 +188,7 @@ impl ServerConfig {
         }
         let CertifiedKey { cert, signing_key } = generate_simple_self_signed(hosts.to_vec())?;
         fs::write(&self.tls.certificate, cert.pem())?;
-        fs::write(&self.tls.private_key, signing_key.serialize_pem())?;
+        write_private_key(&self.tls.private_key, &signing_key.serialize_pem())?;
         println!("certificate written to {}", self.tls.certificate.display());
         println!("private key written to {}", self.tls.private_key.display());
         Ok(())
@@ -205,6 +205,27 @@ impl ServerConfig {
         }
         Ok(())
     }
+}
+
+#[cfg(unix)]
+fn write_private_key(path: &Path, pem: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(pem.as_bytes())?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_private_key(path: &Path, pem: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(path, pem)?;
+    Ok(())
 }
 
 #[cfg(test)]

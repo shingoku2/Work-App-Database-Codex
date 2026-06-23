@@ -23,6 +23,17 @@ This guide covers onboarding a new desktop client through the restricted SSH tun
 
 The private key never leaves the user's computer.
 
+## Pre-pairing API trust boundary
+
+Submitting a tunnel-key request and polling its approval status are deliberate
+pre-pairing exceptions. The desktop client calls
+`POST /api/v1/tunnel-key-requests` and
+`GET /api/v1/tunnel-key-requests/{id}/status?token=...` before it has a saved
+server certificate pin or bearer session. Those calls are HTTPS-only, send only
+the public key/request metadata, and rely on the later pairing fingerprint check
+to establish the pinned server identity. The user's private SSH key must never
+leave the workstation.
+
 ## Admin approval steps
 
 1. Open **Tunnel Keys** in the sidebar.

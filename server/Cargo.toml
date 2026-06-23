@@ -10,6 +10,7 @@ axum-server = { version = "0.8", default-features = false, features = ["tls-rust
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 fleet-shared = { path = "../crates/fleet-shared" }
+hmac.workspace = true
 rand = "0.10"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 rcgen = "0.14"

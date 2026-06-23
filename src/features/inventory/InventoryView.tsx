@@ -30,7 +30,13 @@ export function InventoryView() {
   const { data = [], error, isLoading } = useQuery({ queryKey: ["parts"], queryFn: listParts });
 
   const saveMutation = useMutation({
-    mutationFn: () => (editingSku ? updatePart(form) : createPart(form)),
+    mutationFn: () => {
+      if (editingSku) {
+        return updatePart(form);
+      }
+      const { site_name: _siteName, version: _version, site_id, ...input } = form;
+      return createPart({ ...input, site_id: site_id || null });
+    },
     onSuccess: async () => {
       setForm(emptyPart);
       setEditingSku(null);
@@ -39,7 +45,7 @@ export function InventoryView() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: ({ sku, version }: Pick<Part, "sku" | "version">) => deletePart(sku, version),
+    mutationFn: ({ sku, version, site_id }: Pick<Part, "sku" | "version" | "site_id">) => deletePart(sku, version, site_id),
     onSuccess: async () => {
       await invalidateFleetData(queryClient, "parts");
     },
@@ -69,7 +75,7 @@ export function InventoryView() {
           <button type="button" className={secondaryButtonClass} onClick={() => { setEditingSku(row.original.sku); setForm(row.original); }}>
             Edit
           </button>
-          <button type="button" className={secondaryButtonClass} onClick={() => deleteMutation.mutate({ sku: row.original.sku, version: row.original.version })}>
+          <button type="button" className={secondaryButtonClass} onClick={() => { if (window.confirm(`Delete part "${row.original.sku}"?`)) deleteMutation.mutate({ sku: row.original.sku, version: row.original.version, site_id: row.original.site_id }); }}>
             Delete
           </button>
         </div>
@@ -93,7 +99,7 @@ export function InventoryView() {
           </select>
           <input className={fieldClass} type="number" min="0" step="1" value={form.qty_on_hand} onChange={(event) => setForm({ ...form, qty_on_hand: Number(event.target.value) })} />
           <input className={fieldClass} type="number" min="0" step="1" placeholder="Reorder threshold" value={form.reorder_threshold} onChange={(event) => setForm({ ...form, reorder_threshold: Number(event.target.value) })} />
-          <input className={fieldClass} placeholder="Supplier" value={form.supplier ?? ""} onChange={(event) => setForm({ ...form, supplier: event.target.value })} />
+          <input className={fieldClass} placeholder="Supplier" value={form.supplier ?? ""} onChange={(event) => setForm({ ...form, supplier: event.target.value || null })} />
           <input
             className={fieldClass}
             type="number"
@@ -103,7 +109,7 @@ export function InventoryView() {
             value={(form.unit_cost_cents / 100).toFixed(2)}
             onChange={(event) => setForm({ ...form, unit_cost_cents: Math.round(Number(event.target.value) * 100) })}
           />
-          <textarea className={textareaClass} placeholder="Notes" value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          <textarea className={textareaClass} placeholder="Notes" value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value || null })} />
           <div className="col-span-4 flex items-center gap-2">
             <button className={primaryButtonClass} disabled={saveMutation.isPending}>{editingSku ? "Save Part" : "Create Part"}</button>
             {editingSku && <button type="button" className={secondaryButtonClass} onClick={() => { setEditingSku(null); setForm(emptyPart); }}>Cancel</button>}
