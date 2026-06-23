@@ -1,0 +1,21 @@
+# cargo-audit configuration
+# https://github.com/rustsec/rustsec/blob/main/cargo-audit/audit.toml.example
+
+[advisories]
+# rsa 0.9.10 (RUSTSEC-2023-0071) — Marvin Attack timing sidechannel.
+# This crate is pulled in as an optional dependency of ssh-key 0.6.7 but
+# is NEVER compiled into our binaries. We disabled ssh-key's default
+# features and only enable "ed25519", "alloc", and "std". The rsa feature
+# is not activated. This is a cargo-audit false positive: it scans the
+# lockfile without considering the active feature graph.
+# Threat model: no RSA key operations are performed anywhere in the
+# application. All SSH keys are ed25519.
+ignore = ["RUSTSEC-2023-0071"]
+
+# glib 0.18.5 (RUSTSEC-2024-0429) — unsound Iterator impls.
+# This is a transitive dependency of Tauri v2's Linux GTK/WebKit2GTK stack
+# (atk, gdk, gtk, webkit2gtk, etc. all pull glib 0.18.x). We cannot fix
+# this without Tauri upgrading to gtk-rs 0.19+. This is an upstream
+# platform dependency, not application code.
+# Threat model: the unsound code path is in VariantStrIter, which is not
+# used by our application code. The risk is limited to the Tauri runtime.
