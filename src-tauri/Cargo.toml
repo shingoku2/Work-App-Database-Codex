@@ -1,9 +1,10 @@
 [package]
 name = "antminer-fleet-manager"
-version = "0.3.0"
+version.workspace = true
 description = "Antminer fleet management desktop client"
-authors = ["You"]
-edition = "2021"
+authors = ["Edward Garcia"]
+edition.workspace = true
+license.workspace = true
 
 [lib]
 name = "antminer_fleet_manager_lib"

@@ -1,0 +1,58 @@
+# cargo-audit configuration
+# https://github.com/rustsec/rustsec/blob/main/cargo-audit/audit.toml.example
+
+[advisories]
+ignore = [
+    # rsa 0.9.10 — Marvin Attack timing sidechannel (RUSTSEC-2023-0071).
+    # Pulled in as an optional dep of ssh-key 0.6.x. We only enable the
+    # ed25519/alloc/std features; the rsa feature is never activated and
+    # rsa is never compiled into our binaries. No RSA key operations occur
+    # anywhere in this application. False positive: cargo-audit scans the
+    # lockfile without considering the active feature graph.
+    "RUSTSEC-2023-0071",
+
+    # glib 0.18.5 — unsound VariantStrIter impls (RUSTSEC-2024-0429).
+    # Transitive Tauri v2 Linux/GTK runtime dep. Not compiled on Windows.
+    # Cannot fix without Tauri upgrading to gtk-rs 0.19+. The unsound
+    # code path (VariantStrIter) is not reachable from application code.
+    "RUSTSEC-2024-0429",
+
+    # gtk-rs GTK3 bindings — unmaintained (RUSTSEC-2024-0411 to -0420).
+    # atk, atk-sys, gdk, gdk-sys, gdkwayland-sys, gdkx11, gdkx11-sys,
+    # gtk, gtk-sys, gtk3-macros — all Tauri v2 Linux/GTK platform deps.
+    # Not compiled on Windows. Cannot fix without a Tauri major upgrade.
+    "RUSTSEC-2024-0411",
+    "RUSTSEC-2024-0412",
+    "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0414",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0417",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0419",
+    "RUSTSEC-2024-0420",
+
+    # proc-macro-error 1.0.4 — unmaintained (RUSTSEC-2024-0370).
+    # Pulled in by Tauri platform macros. Not compiled into our output
+    # binaries on Windows (cargo tree -i proc-macro-error returns nothing
+    # for this host target). Upstream Tauri issue.
+    "RUSTSEC-2024-0370",
+
+    # rustls-pemfile 2.2.0 — unmaintained (RUSTSEC-2025-0134).
+    # Directly used by server and Tauri client for PEM certificate parsing.
+    # Advisory notes no fixed version is available; the project suggests
+    # migrating to pem-rfc7468 or rustls-pemfile v3, neither of which are
+    # currently available in stable form or supported by our reqwest/rustls
+    # dependency graph. We will migrate when rustls ecosystem support lands.
+    "RUSTSEC-2025-0134",
+
+    # unic-* crates — unmaintained (RUSTSEC-2025-0075, -0080, -0081, -0098, -0100).
+    # unic-char-property, unic-char-range, unic-common, unic-ucd-ident,
+    # unic-ucd-version — all pulled in by urlpattern via tauri-utils.
+    # Cannot fix without Tauri upgrading its URL pattern implementation.
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+]
