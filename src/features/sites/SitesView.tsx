@@ -5,7 +5,6 @@ import {
   fieldClass,
   primaryButtonClass,
   secondaryButtonClass,
-  textareaClass,
 } from "@/components/ui/Panel";
 import type { Site } from "@/types/db";
 import { createSite, deleteSite, listSites, updateSite } from "./siteApi";

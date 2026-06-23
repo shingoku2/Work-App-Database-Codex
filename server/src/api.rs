@@ -479,6 +479,7 @@ async fn default_site_id(pool: &PgPool) -> AppResult<i64> {
 }
 
 /// Insert an audit log row.  Failures are swallowed — they must not break the caller.
+#[allow(clippy::too_many_arguments)]
 async fn audit_log(
     state: &AppState,
     user_id: Option<i64>,
@@ -968,7 +969,7 @@ async fn create_miner(
             None => default_site_id(&state.pool).await?,
         },
     };
-    let row = sqlx::query(AssertSqlSafe(format!(
+    let row = sqlx::query(AssertSqlSafe(
         r#"INSERT INTO miners (site_id,serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,location,status,acquired_date,notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
@@ -976,7 +977,8 @@ async fn create_miner(
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
            location,status,acquired_date,notes,version"#
-    )))
+            .to_string(),
+    ))
     .bind(site_id)
     .bind(&input.serial).bind(&input.model).bind(&input.firmware).bind(&input.client_name)
     .bind(&input.miner_type).bind(&input.ip_address).bind(&input.mac_address).bind(&input.pickaxe)
@@ -1033,7 +1035,7 @@ async fn update_miner(
     };
     normalize_and_validate_miner(&mut validated).map_err(AppError::bad_request)?;
     // If site_id not in update, keep existing
-    let row = sqlx::query(AssertSqlSafe(format!(
+    let row = sqlx::query(AssertSqlSafe(
         r#"UPDATE miners SET
            site_id=COALESCE($1, site_id),
            serial=$2,model=$3,firmware=$4,client_name=$5,miner_type=$6,ip_address=$7,mac_address=$8,
@@ -1044,7 +1046,8 @@ async fn update_miner(
            serial,model,firmware,client_name,miner_type,ip_address,mac_address,
            pickaxe,miner_state,miner_row,miner_index,miner_rack,miner_rack_group,
            location,status,acquired_date,notes,version"#
-    )))
+            .to_string(),
+    ))
     .bind(validated.site_id)
     .bind(&validated.serial).bind(&validated.model).bind(&validated.firmware).bind(&validated.client_name)
     .bind(&validated.miner_type).bind(&validated.ip_address).bind(&validated.mac_address).bind(&validated.pickaxe)
@@ -1233,9 +1236,10 @@ async fn create_part(
             None => default_site_id(&state.pool).await?,
         },
     };
-    let row = sqlx::query(AssertSqlSafe(format!(
+    let row = sqlx::query(AssertSqlSafe(
         "INSERT INTO parts (site_id,sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING site_id, NULL::TEXT AS site_name, sku,name,category,qty_on_hand,reorder_threshold,supplier,unit_cost_cents,notes,version"
-    )))
+            .to_string(),
+    ))
     .bind(site_id)
     .bind(&input.sku).bind(input.name.trim()).bind(&input.category).bind(input.qty_on_hand)
     .bind(input.reorder_threshold).bind(&input.supplier).bind(input.unit_cost_cents).bind(&input.notes)

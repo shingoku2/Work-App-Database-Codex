@@ -1,5 +1,5 @@
 import { command } from "@/lib/tauri";
-import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelClientConfig, TunnelConfigInput, TunnelKeyInfo, TunnelKeyOnboardingState, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, TunnelStatus, User, UserRole } from "@/types/db";
+import type { ApproveTunnelKeyRequest, ConnectionState, PairingInfo, SubmitTunnelKeyRequest, TunnelConfigInput, TunnelKeyInfo, TunnelKeyOnboardingState, TunnelKeyRequest, TunnelKeyRequestAdmin, TunnelKeyRequestStatus, TunnelStatus, User, UserRole } from "@/types/db";
 
 export function getConnectionState(): Promise<ConnectionState> {
   return command<ConnectionState>("get_connection_state");
