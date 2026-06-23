@@ -13,10 +13,10 @@ This guide covers onboarding a new desktop client through the restricted SSH tun
 ## User first-run steps
 
 1. Open the desktop app.
-2. Enter a machine label and server URL (if reachable on LAN/VPN).
+2. Enter a machine label and server URL.
 3. Click **Generate This Computer's SSH Key**.
-4. If the server is reachable, click **Submit Key for Admin Approval**. Otherwise click **Copy Onboarding Bundle** and send it to an admin out-of-band.
-5. If you submitted a request, wait for admin approval (the app polls every 10 seconds). If you only copied the bundle, there is no automatic polling — wait for the admin out-of-band, then enter the tunnel destination manually or submit later when the server is reachable.
+4. Default path: click **Copy Public Key for Admin** and send the copied bundle to an admin out-of-band.
+5. Optional LAN/VPN-only path: if the server is already reachable without the SSH tunnel, click **Submit Key over LAN/VPN** and wait for admin approval (the app polls every 10 seconds). If you only copied the bundle, there is no automatic polling — wait for the admin out-of-band, then enter the tunnel destination manually.
 6. After approval, review the prefilled tunnel settings and click **Save and Start Tunnel**.
 7. Pair to `https://127.0.0.1:8443` and confirm the certificate fingerprint.
 8. Sign in with a normal Fleet Manager account.
@@ -59,13 +59,13 @@ sudo grep 'antminer-fleet-client:LABEL' /etc/antminer-fleet/client-tunnel/author
 
 | Symptom | Likely cause |
 |---------|----------------|
-| Submit button disabled | Server URL not reachable from the client network; use **Copy Onboarding Bundle** |
+| Submit button disabled | Server URL not reachable from the client network; this is normal before the tunnel exists. Use **Copy Public Key for Admin** |
 | `script_not_found` on approve | Server package missing `authorize-client-tunnel-key.sh` |
 | `permission denied (publickey)` | Key not in `authorized_keys`, wrong identity file, or sshd policy missing |
 | Local port 8443 in use | Another process bound to 8443 on the client |
 | Connection refused on `127.0.0.1:8443` | Tunnel not running or backend not listening on SSH host |
 | OpenSSH missing (Windows) | Install Windows OpenSSH Client feature |
-| Key pending forever | Admin has not approved; or user copied bundle without submit and admin must add key manually |
+| Key pending forever | Admin has not approved; or user copied the public key bundle without LAN/VPN submit and admin must add key manually |
 
 ## Manual key authorization (server CLI)
 

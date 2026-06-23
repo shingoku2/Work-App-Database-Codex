@@ -205,7 +205,7 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
     const bundle = formatOnboardingBundle(label.trim(), key.public_key);
     await navigator.clipboard.writeText(bundle);
     await persistOnboarding(pendingRequest, statusToken);
-    setCopyMessage("Onboarding bundle copied to clipboard.");
+    setCopyMessage("Public key bundle copied to clipboard.");
   };
 
   const handleStartOver = useCallback(async () => {
@@ -246,7 +246,8 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
       <div className="space-y-4 text-sm text-slate-300">
         <p>
           Create this computer&apos;s own SSH tunnel. Do not use Eddie&apos;s SSH login. Enter a label
-          (your name or machine tag), generate a local key, and submit it for admin approval.
+          (your name or machine tag), generate a local key, then copy the public key for admin
+          approval. Direct submit is only for LAN/VPN setups where the server is already reachable.
         </p>
         {status.configured && status.error && <ErrorText error={status.error} />}
         {status.configured && (
@@ -302,26 +303,33 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
                 <div className="mt-2 text-xs text-slate-400">Private key path: {key.identity_file}</div>
               </div>
             )}
+            {key && (
+              <p className="text-xs text-slate-400">
+                Default onboarding path: copy the public key bundle and send it to an admin out-of-band.
+                Use direct submit only when this computer already has LAN/VPN reachability to the Fleet server.
+              </p>
+            )}
             {key && serverUrl.trim() && serverReachable.isError && (
               <p className="text-xs text-amber-200">
-                Server not reachable from this network. Copy the onboarding bundle and send it to an admin.
+                Server not reachable from this network. That is expected before the SSH tunnel exists — copy
+                the public key bundle instead of trying to submit through the locked door.
               </p>
             )}
             {key && (
               <div className="flex flex-wrap gap-2">
                 <button
                   className={primaryButtonClass}
-                  disabled={submitKey.isPending || !canSubmit}
-                  onClick={() => submitKey.mutate()}
-                >
-                  Submit Key for Admin Approval
-                </button>
-                <button
-                  className={secondaryButtonClass}
                   disabled={!label.trim() || !key}
                   onClick={() => void handleCopyBundle()}
                 >
-                  Copy Onboarding Bundle
+                  Copy Public Key for Admin
+                </button>
+                <button
+                  className={secondaryButtonClass}
+                  disabled={submitKey.isPending || !canSubmit}
+                  onClick={() => submitKey.mutate()}
+                >
+                  Submit Key over LAN/VPN
                 </button>
               </div>
             )}
@@ -330,10 +338,9 @@ function TunnelSetupView({ status, onComplete }: { status: TunnelStatus; onCompl
             <hr className="border-white/10" />
             <p className="text-xs text-slate-500">
               After an admin approves your public key, enter the Tunnel SSH Destination they provide. Use
-              the restricted tunnel account they give you, not a personal SSH login. If you used{" "}
-              <strong>Copy Onboarding Bundle</strong> without submitting, there is no automatic approval
-              polling — wait for the admin, then enter the tunnel destination manually below or submit
-              later when the server is reachable.
+              the restricted tunnel account they give you, not a personal SSH login. If you copied the
+              public key bundle without LAN/VPN submit, there is no automatic approval polling — wait for
+              the admin, then enter the tunnel destination manually below.
             </p>
             {approvedReady && (
               <p className="text-xs text-emerald-300">

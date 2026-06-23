@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
 import {
   clearTunnelKeyOnboarding,
+  formatOnboardingBundle,
   generateTunnelKey,
   getConnectionState,
   getTunnelStatus,
@@ -42,6 +43,7 @@ const mockedSaveTunnelConfig = vi.mocked(saveTunnelConfig);
 const mockedLogin = vi.mocked(login);
 const mockedSubmitTunnelKeyRequest = vi.mocked(submitTunnelKeyRequest);
 const mockedProbeServer = vi.mocked(probeServer);
+const mockedFormatOnboardingBundle = vi.mocked(formatOnboardingBundle);
 const mockedLoadTunnelKeyOnboarding = vi.mocked(loadTunnelKeyOnboarding);
 const mockedSaveTunnelKeyOnboarding = vi.mocked(saveTunnelKeyOnboarding);
 const mockedGetTunnelKeyRequestStatus = vi.mocked(getTunnelKeyRequestStatus);
@@ -54,6 +56,8 @@ beforeEach(() => {
   mockedSubmitTunnelKeyRequest.mockReset();
   mockedLogin.mockReset();
   mockedProbeServer.mockReset();
+  mockedFormatOnboardingBundle.mockReset();
+  mockedFormatOnboardingBundle.mockReturnValue("formatted onboarding bundle");
   mockedLoadTunnelKeyOnboarding.mockReset();
   mockedGetTunnelKeyRequestStatus.mockReset();
   mockedGetTunnelKeyRequestStatus.mockResolvedValue({
@@ -161,7 +165,7 @@ describe("ConnectionGate", () => {
 
     await waitFor(() => expect(mockedProbeServer).toHaveBeenCalled());
 
-    await actor.click(screen.getByRole("button", { name: "Submit Key for Admin Approval" }));
+    await actor.click(screen.getByRole("button", { name: "Submit Key over LAN/VPN" }));
 
     await waitFor(() =>
       expect(mockedSubmitTunnelKeyRequest).toHaveBeenCalledWith("https://fleet.example:8443", {
@@ -169,6 +173,63 @@ describe("ConnectionGate", () => {
         public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
       }),
     );
+  });
+
+  it("makes copying the onboarding bundle the default path when the server is unreachable", async () => {
+    mockedState.mockResolvedValue({
+      paired: false,
+      status: "unpaired",
+      url: null,
+      fingerprint_sha256: null,
+      user: null,
+      error: null,
+    });
+    mockedTunnel.mockResolvedValue({
+      supported: true,
+      configured: false,
+      running: false,
+      local_port_open: false,
+      local_url: "https://localhost:8443",
+      remote_target: "127.0.0.1:8443",
+      process_id: null,
+      config_path: "C:/Users/example/AppData/Local/AntminerFleetManager/fleet-tunnel.local.json",
+      error: null,
+    });
+    mockedGenerateTunnelKey.mockResolvedValue({
+      identity_file: "C:/Users/example/.ssh/antminer_fleet_tunnel",
+      public_key_file: "C:/Users/example/.ssh/antminer_fleet_tunnel.pub",
+      public_key: "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+    });
+    mockedProbeServer.mockRejectedValue(new Error("network unreachable"));
+    const actor = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    renderGate();
+
+    const serverUrlInput = await screen.findByLabelText("Server URL");
+    await actor.clear(serverUrlInput);
+    await actor.type(serverUrlInput, "https://fleet.example:8443");
+    await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
+    await actor.click(screen.getByRole("button", { name: "Generate This Computer's SSH Key" }));
+
+    await waitFor(() => expect(mockedProbeServer).toHaveBeenCalled());
+    expect(screen.getByText(/default onboarding path/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Public Key for Admin" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Submit Key over LAN\/VPN" })).toBeDisabled();
+
+    await actor.click(screen.getByRole("button", { name: "Copy Public Key for Admin" }));
+
+    expect(mockedFormatOnboardingBundle).toHaveBeenCalledWith(
+      "alice-workstation",
+      "ssh-ed25519 AAAATEST antminer-fleet-tunnel",
+    );
+    expect(writeText).toHaveBeenCalledWith("formatted onboarding bundle");
+    expect(mockedSubmitTunnelKeyRequest).not.toHaveBeenCalled();
+    expect(await screen.findByText(/public key bundle copied/i)).toBeInTheDocument();
   });
 
   it("keeps sign in enabled when the local credential is absent", async () => {
@@ -301,7 +362,7 @@ describe("ConnectionGate", () => {
     await actor.type(screen.getByPlaceholderText("Your name or machine tag, e.g. alice-workstation"), "alice-workstation");
     await actor.click(screen.getByRole("button", { name: "Generate This Computer's SSH Key" }));
     await waitFor(() => expect(mockedProbeServer).toHaveBeenCalled());
-    await actor.click(screen.getByRole("button", { name: "Submit Key for Admin Approval" }));
+    await actor.click(screen.getByRole("button", { name: "Submit Key over LAN/VPN" }));
 
     expect(await screen.findByText(/request was rejected/i)).toBeInTheDocument();
     expect(screen.getByText(/Note: Unknown device/)).toBeInTheDocument();
