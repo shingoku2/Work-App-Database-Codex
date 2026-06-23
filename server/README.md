@@ -211,7 +211,14 @@ Add `[tunnel_client]` to `/etc/antminer-fleet/server.toml` with the SSH destinat
 
 **Upgrade note:** existing installs must add a real `[tunnel_client]` section before `validate-config` succeeds. Upgrading the Debian package re-applies `authorized_keys` permissions (`root:antminer-fleet`, mode `0660`) via `postinst` so in-app Approve/Revoke works without `sudo`.
 
-When the app displays a user's public key, authorize it with a stable label. On packaged installs, admins can use **Tunnel Keys → Approve** in Fleet Manager; the service user writes directly to `authorized_keys`. For manual recovery or non-deb installs:
+When the app displays a user's public key, authorize it with a stable label.
+The normal first-run path is copy-first: the user selects **Copy Public Key for
+Admin** and sends the bundle out-of-band because the backend is usually
+unreachable until the tunnel exists. Direct **Submit Key over LAN/VPN** is only
+for clients that already have server reachability. On packaged installs, admins
+can use **Tunnel Keys → Approve** in Fleet Manager for submitted requests; the
+service user writes directly to `authorized_keys`. For copied bundles, manual
+recovery, or non-deb installs:
 
 ```bash
 sudo /usr/lib/antminer-fleet-server/authorize-client-tunnel-key.sh \

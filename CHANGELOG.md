@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-06-23
 
 ### Changed
+- Made SSH tunnel user onboarding copy-first: **Copy Public Key for Admin** is
+  now the primary path, while **Submit Key over LAN/VPN** is secondary and only
+  enabled when the server is already reachable before the tunnel exists.
+- Added `.gitattributes` to keep TOML manifests LF-normalized and prevent
+  Git-for-Windows `core.autocrlf=true` from reporting fake dirty
+  `src-tauri/Cargo.toml` files after `cargo tauri build`.
 - Migrated all Rust major dependencies to current upstream versions:
   `keyring 3 -> 4` (feature renames: `windows-native-keyring-store`,
   `apple-native-keyring-store`, `zbus-secret-service-keyring-store`),
@@ -29,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from `128x128.png` during Tauri builds).
 
 ### Fixed
+- Fixed the first-run tunnel-key circular-dependency UX by making the
+  out-of-band copied public-key bundle the default bootstrap path.
+- Fixed line-ending-only dirty working tree noise after Tauri builds on
+  Windows.
 - Resolved ESLint 10 peer-dependency conflict that broke `npm ci` after
   `eslint-plugin-react` was pinned at 7.37.5.
 - Fixed `cargo-audit` config location so suppressions are actually read.
@@ -36,15 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Validation Status
 - Passed: `cargo check --workspace --locked`.
 - Passed: `cargo test --workspace --locked` with 24 Rust tests.
-- Passed: `npm test` with 96 frontend tests across 9 files.
+- Passed: `npm test` with 97 frontend tests across 9 files.
 - Passed: `npm run build`, `cargo fmt --all -- --check`,
   `git diff --check`, and `npm audit --omit=dev` with zero npm
   vulnerabilities.
 - Passed: `cargo audit` with 658 crate dependencies scanned (19
   advisories suppressed with documented rationale in `.cargo/audit.toml`).
-- Passed: `npm run tauri:build` producing NSIS installer
-  (`Antminer Fleet Manager_0.3.0_x64-setup.exe`, 3.4 MB) and raw binary
-  (`antminer-fleet-manager.exe`, 15 MB).
+- Passed: `npm run tauri build` producing NSIS installer
+  (`Antminer Fleet Manager_0.3.0_x64-setup.exe`, 3,554,807 bytes) and raw
+  binary (`antminer-fleet-manager.exe`, 15,408,640 bytes).
 - Not yet verified on target infrastructure: Debian package installation,
   systemd operation, live local or remote PostgreSQL migrations and
   concurrency, populated currency migration, SQLite conflict races,
@@ -56,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix without Tauri upgrading to gtk-rs 0.19+. Suppressed in
   `.cargo/audit.toml` with documented rationale.
 
-## [Unreleased]
+## 0.3.0 Architecture Migration Notes
 
 ### Breaking Changes
 - Replaced the desktop-owned local SQLite architecture with a separately
@@ -208,7 +218,7 @@ To launch the desktop app:
 
 ```powershell
 npm run tauri:dev       # development run
-npm run tauri:build     # NSIS installer (current-user install)
+npm run tauri build     # NSIS installer
 ```
 
 What to look for:

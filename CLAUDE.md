@@ -92,7 +92,18 @@ Clients pin the exact server leaf certificate. Do not replace this with normal C
 - Desktop clients use a local SSH forward from their own `127.0.0.1:8443` to the SSH host's `127.0.0.1:8443`; they must not depend on a container IP.
 - Backend tunnel files: `server/scripts/run-reverse-tunnel.sh`, `server/config/tunnel.example.conf`, and `server/packaging/antminer-fleet-tunnel.service`.
 - Windows helper files live under `scripts/`. Keep `scripts/fleet-tunnel.local.json` local and ignored by Git.
+- First-run tunnel key onboarding is copy-first. Users generate a local key,
+  copy the public-key bundle for an admin, and send it out-of-band. Direct
+  **Submit Key over LAN/VPN** is secondary and only works when the server is
+  already reachable before the SSH tunnel exists.
 - Tunnel automation must use batch/key authentication, reject forwarding failures, use keepalives, and avoid exposing host port `8443` publicly.
+
+### Git and line endings
+
+The repository uses `.gitattributes` to keep `*.toml` files LF-normalized.
+Do not remove that rule: `cargo tauri build` can rewrite `src-tauri/Cargo.toml`
+with LF endings, and Git for Windows with global `core.autocrlf=true` otherwise
+reports a fake dirty file with no content diff.
 
 ## Product rules
 

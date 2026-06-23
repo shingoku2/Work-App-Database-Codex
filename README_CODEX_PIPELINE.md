@@ -49,3 +49,9 @@ Run stages in order:
 ```
 
 Do not run fixer/refactor stages blindly against production branches. Let Codex create a diff, review it like it came from a suspicious intern with root access, then merge intentionally.
+
+## Current Pipeline Status
+
+The 0.3.0 cleanup pass removed stale root-level pipeline reports and migration
+scratch files. New pipeline output still belongs under `.codex/reports/`; do
+not recreate root-level report files.

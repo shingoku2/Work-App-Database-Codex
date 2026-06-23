@@ -81,6 +81,10 @@ workflows.
   `server/packaging/antminer-fleet-tunnel.service`.
 - Windows tunnel helper files are under `scripts/`. Keep
   `scripts/fleet-tunnel.local.json` local and ignored by Git.
+- First-run SSH key onboarding is copy-first: users should generate the local
+  key, use **Copy Public Key for Admin**, and send the bundle out-of-band.
+  **Submit Key over LAN/VPN** is only for clients that can already reach the
+  server before the tunnel exists.
 - Tunnel automation must use batch/key authentication, reject forwarding
   failures, use keepalives, and avoid exposing host port `8443` publicly.
 - Never commit SSH private keys, `known_hosts` deployment files, local tunnel
@@ -146,6 +150,7 @@ Start the server in a tmux session: `cargo run -p antminer-fleet-server -- --con
 ### Tauri desktop gotchas
 
 - Tauri build expects `src-tauri/icons/icon.png`, but the repo only tracks `128x128.png` and `icon.ico`. The build process copies `128x128.png` to `icon.png` automatically; `icon.png` is gitignored as a build artifact.
+- `.gitattributes` keeps `*.toml` files LF-normalized. Do not remove it; `cargo tauri build` can rewrite `src-tauri/Cargo.toml` with LF endings, and Git for Windows with `core.autocrlf=true` otherwise reports fake dirty manifests.
 - Linux Secret Service (keyring) may be unavailable in headless/cloud VMs. Desktop login can fail with credential-storage errors unless D-Bus secret service is running. API-level E2E via `curl` against the server still validates core fleet behavior.
 - `npm run dev` alone serves the React UI on `http://127.0.0.1:1420` but Tauri `invoke` calls will not work without `npm run tauri:dev`.
 

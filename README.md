@@ -65,7 +65,7 @@ npm run tauri:dev
 On Windows, build the configured NSIS desktop installer:
 
 ```bash
-npm run tauri:build
+npm run tauri build
 ```
 
 To ship a client preconfigured for the hosted server, copy `.env.example` to
@@ -73,9 +73,15 @@ To ship a client preconfigured for the hosted server, copy `.env.example` to
 origin, and build the installer. This value is embedded in the frontend and
 must contain only the server origin, never credentials or private material.
 
-On first launch, enter the HTTPS server URL, compare the displayed SHA-256
-certificate fingerprint with the value supplied by the server administrator,
-and then sign in with a named account.
+On first launch, if the server is reachable only through SSH, complete the
+copy-first tunnel onboarding flow before pairing: generate this computer's SSH
+key, use **Copy Public Key for Admin**, send the bundle to an administrator
+out-of-band, then enter the approved tunnel destination and start the tunnel.
+Direct **Submit Key over LAN/VPN** is secondary and only works when the server is
+already reachable without the SSH tunnel. After the tunnel is running, pair to
+`https://127.0.0.1:8443`, compare the displayed SHA-256 certificate fingerprint
+with the value supplied by the server administrator, and then sign in with a
+named account.
 
 Each desktop installation stores one server profile. The server URL, pinned
 certificate, and fingerprint are stored in application data. The bearer
@@ -133,9 +139,10 @@ cargo fmt --all -- --check
 npm audit --omit=dev
 ```
 
-The current automated suite covers frontend behavior, shared validation,
-server configuration rejection, login-limiter behavior, exact certificate
-matching, saved-profile recovery, and command path encoding.
+The current automated suite covers frontend behavior, copy-first SSH tunnel
+onboarding, shared validation, server configuration rejection, login-limiter
+behavior, exact certificate matching, saved-profile recovery, and command path
+encoding.
 
 Live PostgreSQL concurrency/migration tests, a real HTTPS certificate
 substitution test, a packaged Tauri/keyring flow, and Debian/systemd validation

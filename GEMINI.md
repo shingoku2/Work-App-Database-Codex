@@ -109,7 +109,18 @@ Use the smallest relevant validation command first. Do not hide failed tests, bu
 - Clients must not depend on container IPs.
 - Backend tunnel files: `server/scripts/run-reverse-tunnel.sh`, `server/config/tunnel.example.conf`, and `server/packaging/antminer-fleet-tunnel.service`.
 - Windows tunnel helper files live under `scripts/`. Keep `scripts/fleet-tunnel.local.json` local and ignored by Git.
+- First-run tunnel key onboarding is copy-first: generate the local key, copy
+  the public-key bundle for an admin, and send it out-of-band. Direct
+  **Submit Key over LAN/VPN** is secondary and only for clients that can already
+  reach the server before the tunnel exists.
 - Tunnel automation must use batch/key authentication, reject forwarding failures, use keepalives, and avoid exposing host port `8443` publicly.
+
+## Git and Line Endings
+
+- `.gitattributes` keeps `*.toml` files LF-normalized. Keep this rule in place;
+  `cargo tauri build` can rewrite `src-tauri/Cargo.toml` with LF endings, and
+  Git for Windows with global `core.autocrlf=true` otherwise reports fake dirty
+  TOML manifests with no content diff.
 
 ## Product and Security Rules
 

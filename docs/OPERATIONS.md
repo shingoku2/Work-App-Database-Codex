@@ -30,7 +30,7 @@ temporarily disabled. Security therefore depends on comparing the displayed
 SHA-256 fingerprint through an independent trusted channel.
 
 For organization-built clients, set `VITE_FLEET_SERVER_URL` in
-`.env.production.local` before `npm run tauri:build`. The first-run pairing
+`.env.production.local` before `npm run tauri build`. The first-run pairing
 form will be pre-filled with that HTTPS origin. The setting is public build
 configuration, so it must not contain credentials, tokens, certificate private
 keys, or other secrets. Users must still verify and approve the certificate
@@ -62,10 +62,17 @@ delete server data.
 For deployments that still require an SSH jump host, the Windows app now walks
 each user through first-run tunnel setup before pairing. The setup can generate
 a dedicated client key at `%USERPROFILE%\.ssh\antminer_fleet_tunnel`, displays
-only the public key for authorization on the SSH host, and stores the user's
-tunnel settings at `%LOCALAPPDATA%\AntminerFleetManager\fleet-tunnel.local.json`.
+only the public key for authorization on the SSH host, makes **Copy Public Key
+for Admin** the default out-of-band path, and stores the user's tunnel settings
+at `%LOCALAPPDATA%\AntminerFleetManager\fleet-tunnel.local.json`.
 Do not use a developer SSH login for deployed clients, do not bundle private
 keys, and do not commit machine-local tunnel config.
+
+Direct **Submit Key over LAN/VPN** is secondary and only works when the client
+can already reach the server before the SSH tunnel exists. For the normal
+locked-door bootstrap case, the user copies the public-key bundle, sends it to
+an admin out-of-band, waits for approval, then enters the provided tunnel
+destination manually.
 
 The Windows NSIS installer checks for `ssh.exe` and installs the Windows
 OpenSSH Client optional feature when it is missing; this requires an elevated
