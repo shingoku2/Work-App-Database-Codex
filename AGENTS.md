@@ -123,7 +123,7 @@ workflows.
 
 ### Toolchain
 
-- **Node.js 20+** and **npm ci** at the repo root (see `README.md`).
+- **Node.js 20.19.0+** and **npm ci** at the repo root (see `README.md`).
 - **Rust stable** via rustup (`rustup default stable`). The VM image may ship Rust 1.83 as default; Cargo 1.83 cannot build current lockfile dependencies (edition 2024). Always use stable (1.96+ as of 2026-05).
 - **PostgreSQL** is required for the server runtime and full E2E flows. Install/start the distro package locally; create role `antminer_fleet` and database `antminer_fleet` per `server/README.md`.
 - **Tauri v2 Linux deps** (for `npm run tauri:dev`): `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`.

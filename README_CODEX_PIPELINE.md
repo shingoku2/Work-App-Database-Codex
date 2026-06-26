@@ -55,3 +55,10 @@ Do not run fixer/refactor stages blindly against production branches. Let Codex 
 The 0.3.0 cleanup pass removed stale root-level pipeline reports and migration
 scratch files. New pipeline output still belongs under `.codex/reports/`; do
 not recreate root-level report files.
+
+Latest dependency-update sweep report:
+`.codex/reports/2026-06-26_dependency-update-bug-sweep.md`.
+
+Current frontend tooling requires Node.js 20.19.0+ on the Node 20 line. Keep
+context files and package engine metadata aligned when dependency updates change
+toolchain requirements.

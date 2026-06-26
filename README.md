@@ -51,7 +51,7 @@ See [server/README.md](server/README.md) for exact setup commands and
 
 Development prerequisites:
 
-- Node.js 20 or newer.
+- Node.js 20.19.0 or newer. Current frontend tooling (`vite`, `@vitejs/plugin-react`, `eslint`, `@eslint/js`, and `jsdom`) requires at least Node 20.19.0 on the Node 20 line.
 - Rust stable.
 - Tauri v2 platform prerequisites for the development host.
 

@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `reqwest 0.12 -> 0.13` (feature `rustls-tls` -> `rustls-no-provider`),
   `sqlx 0.8 -> 0.9`, `rand 0.9 -> 0.10`, `tower-http 0.6 -> 0.7`,
   `toml 0.9 -> 1.1`.
-- Pinned ESLint to `^9.39.4` (and `@eslint/js` to `^9.39.4`) because
-  `eslint-plugin-react@7.37.5` does not accept ESLint 10.
+- Adopted ESLint 10 (`eslint` `^10`, `@eslint/js` `^10`) and removed the
+  unused `eslint-plugin-react` dependency that blocked the upgrade.
+- Raised the documented/root Node.js requirement to 20.19.0+ to match the
+  current Vite, ESLint, and jsdom engine constraints.
 - Added MIT License to the workspace and all three crates.
 - Moved `cargo-audit` config to `.cargo/audit.toml` (the location
   cargo-audit 0.22+ reads) with documented suppressions for 19 advisories
@@ -39,8 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out-of-band copied public-key bundle the default bootstrap path.
 - Fixed line-ending-only dirty working tree noise after Tauri builds on
   Windows.
-- Resolved ESLint 10 peer-dependency conflict that broke `npm ci` after
-  `eslint-plugin-react` was pinned at 7.37.5.
+- Resolved the ESLint 10 peer-dependency conflict by removing unused
+  `eslint-plugin-react` from `package.json` and `package-lock.json`.
 - Fixed `cargo-audit` config location so suppressions are actually read.
 
 ### Validation Status
@@ -50,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Passed: `npm run build`, `cargo fmt --all -- --check`,
   `git diff --check`, and `npm audit --omit=dev` with zero npm
   vulnerabilities.
-- Passed: `cargo audit` with 658 crate dependencies scanned (19
+- Passed: `cargo audit` with 659 crate dependencies scanned (19
   advisories suppressed with documented rationale in `.cargo/audit.toml`).
 - Passed: `npm run tauri build` producing NSIS installer
   (`Antminer Fleet Manager_0.3.0_x64-setup.exe`, 3,554,807 bytes) and raw
@@ -160,7 +162,7 @@ are documented in `server/README.md` and `docs/OPERATIONS.md`.
 ### Added
 - Added automated test suite: frontend tests run with `npm test` (vitest, jsdom, @testing-library); backend tests run with `cargo test` from `src-tauri/`.
 - Added per-row import statistics. The "Imported N miners" message now distinguishes inserted rows from updated rows and skipped (empty or duplicate) rows.
-- Added a `README.md` with prerequisites (Node 20+, Rust stable, platform Tauri deps), first-build steps, verification commands, and a "common first-build failures" section. The repo's onboarding path now starts at `README.md`; `CLAUDE.md` remains the binding rule set.
+- Added a `README.md` with prerequisites (Node 20.19.0+, Rust stable, platform Tauri deps), first-build steps, verification commands, and a "common first-build failures" section. The repo's onboarding path now starts at `README.md`; `CLAUDE.md` remains the binding rule set.
 
 ### Changed
 - Collapsed the dashboard's four database round-trips into two: the three scalar counts (units, parts, low-stock parts) are now returned from a single query.

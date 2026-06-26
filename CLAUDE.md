@@ -4,16 +4,23 @@ Antminer Fleet Manager is a self-hosted client/server asset-management applicati
 
 ## Commands
 
+Toolchain baseline: Node.js 20.19.0+ for current Vite/ESLint/jsdom tooling,
+Rust stable, and PostgreSQL for server runtime/full E2E flows.
+
 Use the smallest validation that proves the change before broad checks.
 
 ```bash
 npm ci
 npm run build
 npm test
+npx eslint src/
 cargo check -p antminer-fleet-server --locked
 cargo check --workspace --locked
 cargo test --workspace --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --locked -- -D warnings
 npm audit --omit=dev
+cargo audit
 ```
 
 Desktop development:
