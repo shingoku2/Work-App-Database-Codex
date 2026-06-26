@@ -7,7 +7,7 @@ This file is context for Gemini and other LLM agents. Follow `AGENTS.md` and `CL
 ## Project Overview
 
 - Purpose: Manage ASIC miner assets, spreadsheet imports, parts inventory, sites, dashboard reporting, audit logs, webhooks, accounts, and server operations.
-- Frontend stack: React 19, TypeScript, Vite 8, Vitest 4, TanStack Query v5, TanStack Table v8, Lucide React, Tailwind CSS, ESLint 9 (pinned; eslint-plugin-react does not accept ESLint 10).
+- Frontend stack: React 19, TypeScript, Vite 8, Vitest 4, TanStack Query v5, TanStack Table v8, Lucide React, Tailwind CSS, ESLint 10 (eslint-plugin-react removed; eslint-plugin-react-hooks and typescript-eslint support ESLint 10).
 - Desktop shell: Tauri v2 with Rust commands that proxy to the server over pinned HTTPS.
 - Server stack: Rust, Axum, Rustls, SQLx, PostgreSQL, Argon2id password hashing, hashed/revocable bearer sessions.
 - Shared contracts: Rust models in `crates/fleet-shared/src/lib.rs`; TypeScript models in `src/types/db.ts`.
