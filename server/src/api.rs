@@ -20,7 +20,7 @@ use fleet_shared::{
     UpdateMiner, UpdateSite, UpdateUserRequest, UpdateWebhook, User, UserRole, Webhook,
     WebhookDelivery, API_VERSION,
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sqlx::{AssertSqlSafe, PgPool, Row};

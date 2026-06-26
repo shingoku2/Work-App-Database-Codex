@@ -31,7 +31,10 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 pub fn token_hash(token: &str) -> String {
-    format!("{:x}", Sha256::digest(token.as_bytes()))
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub fn new_token() -> String {
